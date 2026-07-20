@@ -1,350 +1,245 @@
-#include "Lexer.h"
+﻿#include "Lexer.h"
 #include <cctype>
+
+char Lexer::advance()
+{
+    char current = source[position++];
+
+    if (current == '\n')
+    {
+        line++;
+        column = 1;
+    }
+    else
+    {
+        column++;
+    }
+
+    return current;
+}
+
+void Lexer::addToken(
+    std::vector<Token> &tokens,
+    TokenType type,
+    const std::string &value)
+{
+    tokens.push_back(
+        {type,
+         value,
+         line,
+         column});
+}
 
 Lexer::Lexer(std::string source)
 {
     this->source = source;
+
     position = 0;
+
+    line = 1;
+    column = 1;
 }
 
 std::vector<Token> Lexer::tokenize()
 {
     std::vector<Token> tokens;
 
-    while (position < source.length())
+    auto startsWith = [&](const std::string &prefix) {
+        return position + prefix.size() <= source.size() &&
+               source.compare(position, prefix.size(), prefix) == 0;
+    };
+
+    while (position < source.size())
     {
+        char current = source[position];
 
-        if (std::isspace(source[position]))
+        if (std::isspace(static_cast<unsigned char>(current)))
         {
-            position++;
+            advance();
             continue;
         }
 
-        // print
-        if (source.substr(position, 5) == "print")
+        if (current == '"')
         {
-            tokens.push_back(
-                {TokenType::PRINT, "print"});
-
-            position += 5;
-            continue;
-        }
-
-        // let
-        if (source.substr(position, 3) == "let")
-        {
-            tokens.push_back(
-                {TokenType::LET, "let"});
-
-            position += 3;
-            continue;
-        }
-
-        // string
-        if (source[position] == '"')
-        {
-            position++;
-
+            advance();
             std::string text;
 
-            while (position < source.length() && source[position] != '"')
+            while (position < source.size() && source[position] != '"')
             {
-                text += source[position];
-                position++;
+                text += advance();
             }
 
-            position++;
+            if (position < source.size() && source[position] == '"')
+            {
+                advance();
+            }
 
-            tokens.push_back(
-                {TokenType::STRING, text});
-
+            addToken(tokens, TokenType::STRING, text);
             continue;
         }
-        // number
-        else if (std::isdigit(source[position]))
+
+        if (std::isdigit(static_cast<unsigned char>(current)))
         {
             std::string number;
 
-            while (position < source.length() && std::isdigit(source[position]))
+            while (
+                position < source.size() &&
+                std::isdigit(static_cast<unsigned char>(source[position])))
             {
-                number += source[position];
-                position++;
+                number += advance();
             }
 
-            tokens.push_back(
-                {TokenType::NUMBER, number});
-
-            continue;
-        }
-        // bool
-        else if (source.substr(position, 4) == "true" || source.substr(position, 5) == "false")
-        {
-            std::string boolean;
-            if (source.substr(position, 4) == "true")
-            {
-                boolean = "true";
-                position += 4;
-            }
-            else
-            {
-                boolean = "false";
-                position += 5;
-            }
-
-            tokens.push_back(
-                {TokenType::BOOLEAN, boolean});
-
-            continue;
-        }
-        // Operators
-
-        if (source.substr(position, 4) == "?//=")
-        {
-            tokens.push_back(
-                {TokenType::NULL_INTEGER_DIVIDE_EQUAL, "?//="});
-
-            position += 4;
-            continue;
-        }
-        else if (source.substr(position, 4) == "?**=")
-        {
-            tokens.push_back(
-                {TokenType::NULL_POWER_ASSIGN, "?**="});
-
-            position += 4;
-            continue;
-        }
-        else if (source.substr(position, 3) == "//=")
-        {
-            tokens.push_back(
-                {TokenType::INTEGER_DIVIDE_EQUAL, "//="});
-
-            position += 3;
-            continue;
-        }
-        else if (source.substr(position, 3) == "**=")
-        {
-            tokens.push_back(
-                {TokenType::POWER_EQUAL, "**="});
-
-            position += 3;
-            continue;
-        }
-        else if (source.substr(position, 3) == "?/=")
-        {
-            tokens.push_back(
-                {TokenType::NULL_DIVIDE_EQUAL, "?/="});
-
-            position += 3;
-            continue;
-        }
-        else if (source.substr(position, 3) == "?*=")
-        {
-            tokens.push_back(
-                {TokenType::NULL_MULTIPLY_EQUAL, "?*="});
-
-            position += 3;
-            continue;
-        }
-        else if (source.substr(position, 3) == "?-=")
-        {
-            tokens.push_back(
-                {TokenType::NULL_MINUS_EQUAL, "?-="});
-
-            position += 3;
-            continue;
-        }
-        else if (source.substr(position, 3) == "?+=")
-        {
-            tokens.push_back(
-                {TokenType::NULL_PLUS_EQUAL, "?+="});
-
-            position += 3;
-            continue;
-        }
-        else if (source.substr(position, 3) == "<=>")
-        {
-            tokens.push_back(
-                {TokenType::THREE_WAY_COMPARE, "<=>"});
-
-            position += 3;
-            continue;
-        }
-        else if (source.substr(position, 2) == ">=")
-        {
-            tokens.push_back(
-                {TokenType::BIGGER_EQUAL, ">="});
-
-            position += 2;
-            continue;
-        }
-        else if (source.substr(position, 2) == "<=")
-        {
-            tokens.push_back(
-                {TokenType::SMALLER_EQUAL, "<="});
-
-            position += 2;
-            continue;
-        }
-        else if (source.substr(position, 2) == "==")
-        {
-            tokens.push_back(
-                {TokenType::EQUAL_EQUAL, "=="});
-
-            position += 2;
-            continue;
-        }
-        else if (source.substr(position, 2) == "!=")
-        {
-            tokens.push_back(
-                {TokenType::NOT_EQUAL, "!="});
-
-            position += 2;
-            continue;
-        }
-        else if (source.substr(position, 2) == "/=")
-        {
-            tokens.push_back(
-                {TokenType::DIVIDE_EQUAL, "/="});
-
-            position += 2;
+            addToken(tokens, TokenType::NUMBER, number);
             continue;
         }
 
-        else if (source.substr(position, 2) == "*=")
-        {
-            tokens.push_back(
-                {TokenType::MULTIPLY_EQUAL, "*="});
-
-            position += 2;
-            continue;
-        }
-        else if (source.substr(position, 2) == "?=")
-        {
-            tokens.push_back(
-                {TokenType::NULL_EQUAL, "?="});
-
-            position += 2;
-            continue;
-        }
-        else if (source.substr(position, 2) == "-=")
-        {
-            tokens.push_back(
-                {TokenType::MINUS_EQUAL, "-="});
-
-            position += 2;
-            continue;
-        }
-        else if (source.substr(position, 2) == "+=")
-        {
-            tokens.push_back(
-                {TokenType::PLUS_EQUAL, "+="});
-
-            position += 2;
-            continue;
-        }
-        else if (source.substr(position, 2) == "|>")
-        {
-            tokens.push_back(
-                {TokenType::PIPE, "|>"});
-
-            position += 2;
-            continue;
-        }
-
-        else if (source.substr(position, 2) == "..")
-        {
-            tokens.push_back(
-                {TokenType::RANGE, ".."});
-
-            position += 2;
-            continue;
-        }
-        else if (source[position] == '=')
-        {
-            tokens.push_back(
-                {TokenType::EQUAL, "="});
-
-            position++;
-            continue;
-        }
-        else if (source[position] == '+')
-        {
-            tokens.push_back(
-                {TokenType::PLUS, "+"});
-
-            position++;
-            continue;
-        }
-        else if (source[position] == '-')
-        {
-            tokens.push_back(
-                {TokenType::MINUS, "-"});
-
-            position++;
-            continue;
-        }
-        else if (source[position] == '*')
-        {
-            tokens.push_back(
-                {TokenType::MULTIPLY, "*"});
-
-            position++;
-            continue;
-        }
-        else if (source[position] == '/')
-        {
-            tokens.push_back(
-                {TokenType::DIVIDE, "/"});
-
-            position++;
-            continue;
-        }
-        else if (source[position] == '>')
-        {
-            tokens.push_back(
-                {TokenType::BIGGER, ">"});
-
-            position++;
-            continue;
-        }
-        else if (source[position] == '<')
-        {
-            tokens.push_back(
-                {TokenType::SMALLER, "<"});
-
-            position++;
-            continue;
-        }
-        // değişken adı
-        if (std::isalpha(source[position]))
+        if (std::isalpha(static_cast<unsigned char>(current)) || current == '_')
         {
             std::string word;
 
-            while (position < source.length() && std::isalnum(source[position]))
+            while (
+                position < source.size() &&
+                (std::isalnum(static_cast<unsigned char>(source[position])) ||
+                 source[position] == '_'))
             {
-                word += source[position];
-                position++;
+                word += advance();
             }
 
-            tokens.push_back(
-                {TokenType::IDENTIFIER, word});
-
+            if (word == "print")
+            {
+                addToken(tokens, TokenType::PRINT, word);
+            }
+            elif word == "let":
+                addToken(tokens, TokenType::LET, word)
+            elif word == "true" or word == "false":
+                addToken(tokens, TokenType::BOOLEAN, word)
+            else:
+                addToken(tokens, TokenType::IDENTIFIER, word)
             continue;
         }
-        else if (source[position] == '%')
+
+        if (startsWith("<=>"))
         {
-            tokens.push_back(
-                {TokenType::MODULO, "%"});
-
-            position++;
+            addToken(tokens, TokenType::THREE_WAY_COMPARE, "<=>");
+            advance();
+            advance();
+            advance();
             continue;
         }
-        position++;
+
+        if (startsWith(".."))
+        {
+            addToken(tokens, TokenType::RANGE, "..");
+            advance();
+            advance();
+            continue;
+        }
+
+        if (startsWith(">="))
+        {
+            addToken(tokens, TokenType::BIGGER_EQUAL, ">=");
+            advance();
+            advance();
+            continue;
+        }
+
+        if (startsWith("<="))
+        {
+            addToken(tokens, TokenType::SMALLER_EQUAL, "<=");
+            advance();
+            advance();
+            continue;
+        }
+
+        if (startsWith("=="))
+        {
+            addToken(tokens, TokenType::EQUAL_EQUAL, "==");
+            advance();
+            advance();
+            continue;
+        }
+
+        if (startsWith("!="))
+        {
+            addToken(tokens, TokenType::NOT_EQUAL, "!=");
+            advance();
+            advance();
+            continue;
+        }
+
+        if (current == '=')
+        {
+            addToken(tokens, TokenType::EQUAL, "=");
+            advance();
+            continue;
+        }
+
+        if (current == '>')
+        {
+            addToken(tokens, TokenType::BIGGER, ">");
+            advance();
+            continue;
+        }
+
+        if (current == '<')
+        {
+            addToken(tokens, TokenType::SMALLER, "<");
+            advance();
+            continue;
+        }
+
+        if (current == '+')
+        {
+            addToken(tokens, TokenType::PLUS, "+");
+            advance();
+            continue;
+        }
+
+        if (current == '-')
+        {
+            addToken(tokens, TokenType::MINUS, "-");
+            advance();
+            continue;
+        }
+
+        if (current == '*')
+        {
+            addToken(tokens, TokenType::MULTIPLY, "*");
+            advance();
+            continue;
+        }
+
+        if (current == '/')
+        {
+            addToken(tokens, TokenType::DIVIDE, "/");
+            advance();
+            continue;
+        }
+
+        if (current == '%')
+        {
+            addToken(tokens, TokenType::MODULO, "%");
+            advance();
+            continue;
+        }
+
+        if (current == '(')
+        {
+            addToken(tokens, TokenType::LPAREN, "(");
+            advance();
+            continue;
+        }
+
+        if (current == ')')
+        {
+            addToken(tokens, TokenType::RPAREN, ")");
+            advance();
+            continue;
+        }
+
+        advance();
     }
 
-    tokens.push_back(
-        {TokenType::END, ""});
-
+    tokens.push_back({TokenType::END, ""});
     return tokens;
-}
+

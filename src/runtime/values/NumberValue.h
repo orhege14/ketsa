@@ -15,7 +15,7 @@ public:
 
     NumberValue(int value);
 
-
+    void FloatValue(float value); 
     ValueType getType() const override;
 
 

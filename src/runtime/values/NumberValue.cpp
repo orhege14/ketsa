@@ -4,7 +4,6 @@ NumberValue::NumberValue(int value)
 {
     this->value = value;
 }
-
 ValueType NumberValue::getType() const
 {
     return ValueType::NUMBER;

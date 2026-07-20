@@ -33,6 +33,8 @@ private:
 
     std::unique_ptr<ASTNode> parseFactor();
 
+    std::unique_ptr<ASTNode> parsePrimary();
+
 
 
     // Variables
