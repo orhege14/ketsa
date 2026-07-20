@@ -44,7 +44,8 @@ std::vector<Token> Lexer::tokenize()
 {
     std::vector<Token> tokens;
 
-    auto startsWith = [&](const std::string &prefix) {
+    auto startsWith = [&](const std::string &prefix)
+    {
         return position + prefix.size() <= source.size() &&
                source.compare(position, prefix.size(), prefix) == 0;
     };
@@ -92,7 +93,6 @@ std::vector<Token> Lexer::tokenize()
             addToken(tokens, TokenType::NUMBER, number);
             continue;
         }
-
         if (std::isalpha(static_cast<unsigned char>(current)) || current == '_')
         {
             std::string word;
@@ -109,137 +109,144 @@ std::vector<Token> Lexer::tokenize()
             {
                 addToken(tokens, TokenType::PRINT, word);
             }
-            elif word == "let":
-                addToken(tokens, TokenType::LET, word)
-            elif word == "true" or word == "false":
-                addToken(tokens, TokenType::BOOLEAN, word)
-            else:
-                addToken(tokens, TokenType::IDENTIFIER, word)
+            else if (word == "let")
+            {
+                addToken(tokens, TokenType::LET, word);
+            }
+            else if (word == "true" || word == "false")
+            {
+                addToken(tokens, TokenType::BOOLEAN, word);
+            }
+            else
+            {
+                addToken(tokens, TokenType::IDENTIFIER, word);
+            }
+
             continue;
         }
 
-        if (startsWith("<=>"))
-        {
-            addToken(tokens, TokenType::THREE_WAY_COMPARE, "<=>");
+            if (startsWith("<=>"))
+            {
+                addToken(tokens, TokenType::THREE_WAY_COMPARE, "<=>");
+                advance();
+                advance();
+                advance();
+                continue;
+            }
+
+            if (startsWith(".."))
+            {
+                addToken(tokens, TokenType::RANGE, "..");
+                advance();
+                advance();
+                continue;
+            }
+
+            if (startsWith(">="))
+            {
+                addToken(tokens, TokenType::BIGGER_EQUAL, ">=");
+                advance();
+                advance();
+                continue;
+            }
+
+            if (startsWith("<="))
+            {
+                addToken(tokens, TokenType::SMALLER_EQUAL, "<=");
+                advance();
+                advance();
+                continue;
+            }
+
+            if (startsWith("=="))
+            {
+                addToken(tokens, TokenType::EQUAL_EQUAL, "==");
+                advance();
+                advance();
+                continue;
+            }
+
+            if (startsWith("!="))
+            {
+                addToken(tokens, TokenType::NOT_EQUAL, "!=");
+                advance();
+                advance();
+                continue;
+            }
+
+            if (current == '=')
+            {
+                addToken(tokens, TokenType::EQUAL, "=");
+                advance();
+                continue;
+            }
+
+            if (current == '>')
+            {
+                addToken(tokens, TokenType::BIGGER, ">");
+                advance();
+                continue;
+            }
+
+            if (current == '<')
+            {
+                addToken(tokens, TokenType::SMALLER, "<");
+                advance();
+                continue;
+            }
+
+            if (current == '+')
+            {
+                addToken(tokens, TokenType::PLUS, "+");
+                advance();
+                continue;
+            }
+
+            if (current == '-')
+            {
+                addToken(tokens, TokenType::MINUS, "-");
+                advance();
+                continue;
+            }
+
+            if (current == '*')
+            {
+                addToken(tokens, TokenType::MULTIPLY, "*");
+                advance();
+                continue;
+            }
+
+            if (current == '/')
+            {
+                addToken(tokens, TokenType::DIVIDE, "/");
+                advance();
+                continue;
+            }
+
+            if (current == '%')
+            {
+                addToken(tokens, TokenType::MODULO, "%");
+                advance();
+                continue;
+            }
+
+            if (current == '(')
+            {
+                addToken(tokens, TokenType::LPAREN, "(");
+                advance();
+                continue;
+            }
+
+            if (current == ')')
+            {
+                addToken(tokens, TokenType::RPAREN, ")");
+                advance();
+                continue;
+            }
+
             advance();
-            advance();
-            advance();
-            continue;
         }
 
-        if (startsWith(".."))
-        {
-            addToken(tokens, TokenType::RANGE, "..");
-            advance();
-            advance();
-            continue;
-        }
-
-        if (startsWith(">="))
-        {
-            addToken(tokens, TokenType::BIGGER_EQUAL, ">=");
-            advance();
-            advance();
-            continue;
-        }
-
-        if (startsWith("<="))
-        {
-            addToken(tokens, TokenType::SMALLER_EQUAL, "<=");
-            advance();
-            advance();
-            continue;
-        }
-
-        if (startsWith("=="))
-        {
-            addToken(tokens, TokenType::EQUAL_EQUAL, "==");
-            advance();
-            advance();
-            continue;
-        }
-
-        if (startsWith("!="))
-        {
-            addToken(tokens, TokenType::NOT_EQUAL, "!=");
-            advance();
-            advance();
-            continue;
-        }
-
-        if (current == '=')
-        {
-            addToken(tokens, TokenType::EQUAL, "=");
-            advance();
-            continue;
-        }
-
-        if (current == '>')
-        {
-            addToken(tokens, TokenType::BIGGER, ">");
-            advance();
-            continue;
-        }
-
-        if (current == '<')
-        {
-            addToken(tokens, TokenType::SMALLER, "<");
-            advance();
-            continue;
-        }
-
-        if (current == '+')
-        {
-            addToken(tokens, TokenType::PLUS, "+");
-            advance();
-            continue;
-        }
-
-        if (current == '-')
-        {
-            addToken(tokens, TokenType::MINUS, "-");
-            advance();
-            continue;
-        }
-
-        if (current == '*')
-        {
-            addToken(tokens, TokenType::MULTIPLY, "*");
-            advance();
-            continue;
-        }
-
-        if (current == '/')
-        {
-            addToken(tokens, TokenType::DIVIDE, "/");
-            advance();
-            continue;
-        }
-
-        if (current == '%')
-        {
-            addToken(tokens, TokenType::MODULO, "%");
-            advance();
-            continue;
-        }
-
-        if (current == '(')
-        {
-            addToken(tokens, TokenType::LPAREN, "(");
-            advance();
-            continue;
-        }
-
-        if (current == ')')
-        {
-            addToken(tokens, TokenType::RPAREN, ")");
-            advance();
-            continue;
-        }
-
-        advance();
+        tokens.push_back({TokenType::END, ""});
+        return tokens;
     }
-
-    tokens.push_back({TokenType::END, ""});
-    return tokens;
-

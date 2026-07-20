@@ -160,7 +160,6 @@ std::unique_ptr<Value> Interpreter::evaluate(ASTNode *node)
                     leftNumber->getValue() !=
                     rightNumber->getValue());
             }
-
             else if (binary->op == ">")
             {
                 return std::make_unique<BooleanValue>(

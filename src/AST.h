@@ -115,7 +115,6 @@ struct VariableDeclarationNode : ASTNode
     std::string name;
 
     std::unique_ptr<ASTNode> value;
-
     VariableDeclarationNode(
         std::string name,
         std::unique_ptr<ASTNode> value)
