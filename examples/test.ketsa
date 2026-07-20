@@ -1,0 +1,9 @@
+let age = 20
+
+print age
+age = 10
+print age
+
+print 10 > 5
+
+print 1 <=> 5

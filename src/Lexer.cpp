@@ -243,6 +243,23 @@ std::vector<Token> Lexer::tokenize()
             position += 2;
             continue;
         }
+        else if (source.substr(position, 2) == "|>")
+        {
+            tokens.push_back(
+                {TokenType::PIPE, "|>"});
+
+            position += 2;
+            continue;
+        }
+
+        else if (source.substr(position, 2) == "..")
+        {
+            tokens.push_back(
+                {TokenType::RANGE, ".."});
+
+            position += 2;
+            continue;
+        }
         else if (source[position] == '=')
         {
             tokens.push_back(

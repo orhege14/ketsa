@@ -1,6 +1,6 @@
 #include <iostream>
 #include <fstream>
-#include <sstream>
+#include <string>
 
 #include "Lexer.h"
 #include "Parser.h"
@@ -9,7 +9,6 @@
 
 int main(int argc, char* argv[])
 {
-
     if(argc < 2)
     {
         std::cout << "Usage: ketsa <file.ketsa>\n";
@@ -19,49 +18,39 @@ int main(int argc, char* argv[])
 
     std::ifstream file(argv[1]);
 
-
-    if(!file.is_open())
+    if(!file)
     {
-        std::cout << "File not found!\n";
+        std::cout << "Cannot open file\n";
         return 1;
     }
 
 
-    std::stringstream buffer;
-
-    buffer << file.rdbuf();
-
-
-    std::string code = buffer.str();
-
+    std::string source(
+        (std::istreambuf_iterator<char>(file)),
+        std::istreambuf_iterator<char>()
+    );
 
 
     // Lexer
-
-    Lexer lexer(code);
+    Lexer lexer(source);
 
     auto tokens = lexer.tokenize();
 
 
-
     // Parser
-
     Parser parser(tokens);
 
-    auto ast = parser.parse();
-
+    auto nodes = parser.parse();
 
 
     // Interpreter
-
     Interpreter interpreter;
 
 
-    for(auto& node : ast)
+    for(auto& node : nodes)
     {
         interpreter.execute(node.get());
     }
-
 
 
     return 0;
