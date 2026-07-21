@@ -1,0 +1,10 @@
+{
+  "iconDefinitions": {
+    "_ketsa": {
+      "iconPath": "./ketsa-file.png"
+    }
+  },
+  "fileExtensions": {
+    "ketsa": "_ketsa"
+  }
+}

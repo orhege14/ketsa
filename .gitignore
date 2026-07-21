@@ -24,3 +24,8 @@ Thumbs.db
 
 # Project
 ketsa.toml
+
+
+node_modules/
+out/
+*.vsix

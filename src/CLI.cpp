@@ -84,7 +84,7 @@ int CLI::execute(const CLIContext& ctx)
 
 void CLI::printHeader()
 {
-    std::cout << "Ketsa Programming Language v0.3\n";
+    std::cout << "Ketsa Programming Language v0.5\n";
 }
 
 void CLI::printUsage()
@@ -473,7 +473,7 @@ std::vector<CLI::HealthCheck> CLI::runDoctor()
         HealthCheck h;
         h.name = "Ketsa Compiler";
         h.passed = true;
-        h.detail = "v0.3.0 - Type Checker + Bytecode VM";
+        h.detail = "v0.5.0 - Type Checker + Bytecode VM";
         checks.push_back(h);
     }
 
