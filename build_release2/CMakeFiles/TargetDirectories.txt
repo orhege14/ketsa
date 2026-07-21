@@ -1,0 +1,4 @@
+C:/Users/orhun/Desktop/ketsa compiler/build_release2/CMakeFiles/ketsa.dir
+C:/Users/orhun/Desktop/ketsa compiler/build_release2/CMakeFiles/INSTALL.dir
+C:/Users/orhun/Desktop/ketsa compiler/build_release2/CMakeFiles/ALL_BUILD.dir
+C:/Users/orhun/Desktop/ketsa compiler/build_release2/CMakeFiles/ZERO_CHECK.dir

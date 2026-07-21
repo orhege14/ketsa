@@ -1,0 +1,13 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="18.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <CustomBuild Include="C:\Users\orhun\Desktop\ketsa compiler\build_release2\CMakeFiles\1c0b2a577b74fd1850dc5034de622dfc\generate.stamp.rule">
+      <Filter>CMake Rules</Filter>
+    </CustomBuild>
+  </ItemGroup>
+  <ItemGroup>
+    <Filter Include="CMake Rules">
+      <UniqueIdentifier>{79B87710-31F2-30E2-86B9-661109D82F0C}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+</Project>

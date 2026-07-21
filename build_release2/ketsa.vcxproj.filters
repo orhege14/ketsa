@@ -1,0 +1,91 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="18.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <ClCompile Include="C:\Users\orhun\Desktop\ketsa compiler\src\CLI.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\orhun\Desktop\ketsa compiler\src\Interpreter.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\orhun\Desktop\ketsa compiler\src\Lexer.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\orhun\Desktop\ketsa compiler\src\Parser.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\orhun\Desktop\ketsa compiler\src\TypeChecker.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\orhun\Desktop\ketsa compiler\src\bytecode\Compiler.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\orhun\Desktop\ketsa compiler\src\bytecode\VM.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\orhun\Desktop\ketsa compiler\src\errors\Error.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\orhun\Desktop\ketsa compiler\src\jit\JIT.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\orhun\Desktop\ketsa compiler\src\jit\Optimizer.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\orhun\Desktop\ketsa compiler\src\jit\x64\Assembler.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\orhun\Desktop\ketsa compiler\src\main.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\orhun\Desktop\ketsa compiler\src\runtime\Environment.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\orhun\Desktop\ketsa compiler\src\runtime\values\ArrayValue.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\orhun\Desktop\ketsa compiler\src\runtime\values\BooleanValue.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\orhun\Desktop\ketsa compiler\src\runtime\values\BuiltinFunctionValue.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\orhun\Desktop\ketsa compiler\src\runtime\values\CharValue.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\orhun\Desktop\ketsa compiler\src\runtime\values\ClassValue.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\orhun\Desktop\ketsa compiler\src\runtime\values\FloatValue.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\orhun\Desktop\ketsa compiler\src\runtime\values\FunctionValue.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\orhun\Desktop\ketsa compiler\src\runtime\values\ModuleValue.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\orhun\Desktop\ketsa compiler\src\runtime\values\NullValue.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\orhun\Desktop\ketsa compiler\src\runtime\values\NumberValue.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\orhun\Desktop\ketsa compiler\src\runtime\values\ObjectValue.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\orhun\Desktop\ketsa compiler\src\runtime\values\StringValue.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\orhun\Desktop\ketsa compiler\src\runtime\values\Value.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <CustomBuild Include="C:\Users\orhun\Desktop\ketsa compiler\CMakeLists.txt" />
+  </ItemGroup>
+  <ItemGroup>
+    <Filter Include="Source Files">
+      <UniqueIdentifier>{CAD5F4E9-43FD-37CC-8113-00B50F59B03A}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+</Project>

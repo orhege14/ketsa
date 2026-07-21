@@ -1,0 +1,10 @@
+^C:\USERS\ORHUN\DESKTOP\KETSA COMPILER\BUILD_RELEASE2\CMAKEFILES\1C0B2A577B74FD1850DC5034DE622DFC\GENERATE.STAMP.RULE
+setlocal
+"C:\Program Files\CMake\bin\cmake.exe" "-SC:/Users/orhun/Desktop/ketsa compiler" "-BC:/Users/orhun/Desktop/ketsa compiler/build_release2" --check-stamp-list CMakeFiles/generate.stamp.list --vs-solution-file "C:/Users/orhun/Desktop/ketsa compiler/build_release2/Ketsa.slnx"
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal & call :cmErrorLevel %errorlevel% & goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd
