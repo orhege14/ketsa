@@ -1,0 +1,5 @@
+let arr = [1, 2, 3, 4, 5]
+print "Array: " + toString(arr)
+print "Length: " + toString(len(arr))
+print "First: " + toString(arr[0])
+print "Last: " + toString(arr[4])

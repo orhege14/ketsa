@@ -1,0 +1,9 @@
+let a = 10
+let b = 3
+
+print "a + b = " + toString(a + b)
+print "a - b = " + toString(a - b)
+print "a * b = " + toString(a * b)
+print "a / b = " + toString(a / b)
+print "a % b = " + toString(a % b)
+print "a ** b = " + toString(a ** 3)

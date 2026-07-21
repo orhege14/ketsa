@@ -1,0 +1,2 @@
+const constant_val = 42
+print constant_val

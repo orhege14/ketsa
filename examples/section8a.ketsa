@@ -1,0 +1,6 @@
+match (3) {
+    case 1:
+        print "One"
+    else:
+        print "Other"
+}

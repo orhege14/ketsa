@@ -1,0 +1,4 @@
+let x = 42
+print "after x"
+let pi = 3.14
+print "after pi"

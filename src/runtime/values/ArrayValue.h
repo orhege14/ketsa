@@ -5,74 +5,21 @@
 #include <memory>
 #include <string>
 
-
 class ArrayValue : public Value
 {
-
-private:
-
-    std::vector<std::unique_ptr<Value>> values;
-
-
+    std::vector<std::unique_ptr<Value>> elements;
 public:
+    ArrayValue();
+    explicit ArrayValue(std::vector<std::unique_ptr<Value>> elements);
+    ValueType getType() const override;
+    std::string toString() const override;
+    std::unique_ptr<Value> clone() const override;
+    TypeInfo getTypeInfo() const override;
 
-    ArrayValue(
-        std::vector<std::unique_ptr<Value>> values
-    )
-        : values(std::move(values))
-    {
-    }
-
-
-
-    ValueType getType() const override
-    {
-        return ValueType::ARRAY;
-    }
-
-
-
-    std::string toString() const override
-    {
-        std::string result = "[";
-
-
-        for(size_t i = 0; i < values.size(); i++)
-        {
-            result += values[i]->toString();
-
-
-            if(i != values.size() - 1)
-            {
-                result += ", ";
-            }
-        }
-
-
-        result += "]";
-
-
-        return result;
-    }
-
-
-
-    std::unique_ptr<Value> clone() const override
-    {
-        std::vector<std::unique_ptr<Value>> copy;
-
-
-        for(const auto& value : values)
-        {
-            copy.push_back(
-                value->clone()
-            );
-        }
-
-
-        return std::make_unique<ArrayValue>(
-            std::move(copy)
-        );
-    }
-
+    size_t size() const;
+    Value* get(size_t index) const;
+    void set(size_t index, std::unique_ptr<Value> value);
+    void push(std::unique_ptr<Value> value);
+    std::unique_ptr<Value> pop();
+    const std::vector<std::unique_ptr<Value>>& getElements() const;
 };

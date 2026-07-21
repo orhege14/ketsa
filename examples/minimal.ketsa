@@ -1,0 +1,17 @@
+print "Hello World"
+let x = 42
+print x
+if (x > 10) {
+    print "x is large"
+}
+let i = 0
+while (i < 3) {
+    print i
+    i += 1
+}
+func add(a: int, b: int): int {
+    return a + b
+}
+print add(10, 20)
+let arr = [1, 2, 3]
+print len(arr)

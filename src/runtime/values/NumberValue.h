@@ -2,29 +2,14 @@
 
 #include "Value.h"
 
-
 class NumberValue : public Value
 {
-
-private:
-
-    int value;
-
-
+    int64_t value;
 public:
-
-    NumberValue(int value);
-
-    void FloatValue(float value); 
+    explicit NumberValue(int64_t value);
     ValueType getType() const override;
-
-
     std::string toString() const override;
-
-
     std::unique_ptr<Value> clone() const override;
-
-
-    int getValue() const;
-
+    int64_t getValue() const;
+    TypeInfo getTypeInfo() const override;
 };

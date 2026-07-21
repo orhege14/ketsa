@@ -1,3 +1,175 @@
-x = 10
+// Ketsa Comprehensive Test Suite
+// Testing all language features
+
+// === Variables & Types ===
+let name = "Ketsa"
+let version = 3
+let pi = 3.14
+let isAwesome = true
+const constant = 42
+
+// Type annotations
+let typed_var: int = 100
+let typed_float: float = 3.14
+let typed_string: string = "hello"
+let typed_bool: bool = false
+
+// === Print ===
+print "=== Ketsa Language Test ==="
+print "Name: " + name
+print "Version: " + toString(version)
+print "Pi: " + toString(pi)
+print "Is Awesome: " + toString(isAwesome)
+print "Constant: " + toString(constant)
+
+// === Arithmetic ===
+let a = 10
+let b = 3
+print "--- Arithmetic ---"
+print "a + b = " + toString(a + b)
+print "a - b = " + toString(a - b)
+print "a * b = " + toString(a * b)
+print "a / b = " + toString(a / b)
+print "a % b = " + toString(a % b)
+print "a ** b = " + toString(a ** 3)
+
+// === Comparison ===
+print "--- Comparison ---"
+print "a == b: " + toString(a == b)
+print "a != b: " + toString(a != b)
+print "a > b: " + toString(a > b)
+print "a < b: " + toString(a < b)
+print "a >= b: " + toString(a >= b)
+print "a <= b: " + toString(a <= b)
+
+// === Assignment Operators ===
+let x = 5
 x += 10
-print x
+print "x after += 10: " + toString(x)
+x -= 3
+print "x after -= 3: " + toString(x)
+x *= 2
+print "x after *= 2: " + toString(x)
+x /= 3
+print "x after /= 3: " + toString(x)
+
+// === If/Else ===
+print "--- Control Flow ---"
+let score = 85
+
+if (score >= 90) {
+    print "Grade: A"
+} else if (score >= 80) {
+    print "Grade: B"
+} else if (score >= 70) {
+    print "Grade: C"
+} else {
+    print "Grade: F"
+}
+
+// === While Loop ===
+print "--- While Loop ---"
+let count = 0
+while (count < 5) {
+    print "Count: " + toString(count)
+    count += 1
+}
+
+// === For Loop ===
+print "--- For Loop ---"
+for (i in [1, 2, 3, 4, 5]) {
+    print "For: " + toString(i)
+}
+
+// === Break/Continue ===
+print "--- Break/Continue ---"
+let n = 0
+while (n < 10) {
+    n += 1
+    if (n == 3) {
+        continue
+    }
+    if (n == 7) {
+        break
+    }
+    print "n: " + toString(n)
+}
+
+// === Functions ===
+print "--- Functions ---"
+func add(a: int, b: int): int {
+    return a + b
+}
+
+func greet(name: string): string {
+    return "Hello, " + name + "!"
+}
+
+print greet("Ketsa")
+print "add(5, 3) = " + toString(add(5, 3))
+
+// === Arrays ===
+print "--- Arrays ---"
+let arr = [1, 2, 3, 4, 5]
+print "Array: " + toString(arr)
+print "Length: " + toString(len(arr))
+print "First: " + toString(arr[0])
+print "Last: " + toString(arr[4])
+
+// === Nested Expressions ===
+print "--- Nested ---"
+print "Complex: " + toString((a + b) * (a - b) / 2)
+
+// === Type Checking ===
+print "--- Type Info ---"
+print "Type of 123: " + type(123)
+print "Type of 3.14: " + type(3.14)
+print "Type of \"hi\": " + type("hi")
+print "Type of true: " + type(true)
+print "Type of [1,2]: " + type([1, 2])
+
+// === Range ===
+print "--- Range ---"
+let r = range(0, 5)
+print "Range(0,5): " + toString(r)
+
+// === Pattern Matching ===
+print "--- Pattern Matching ---"
+let value = 3
+
+match (value) {
+    case 1:
+        print "One"
+    case 2:
+        print "Two"
+    case 3:
+        print "Three"
+    else:
+        print "Other"
+}
+
+// === Switch ===
+print "--- Switch ---"
+switch (score) {
+    case 100:
+        print "Perfect!"
+    case 85:
+        print "Great!"
+    default:
+        print "Keep trying!"
+}
+
+// === String Operations ===
+print "--- Strings ---"
+let hello = "Hello"
+let world = "World"
+print hello + " " + world
+print "Length: " + toString(len(hello + " " + world))
+
+// === Boolean Logic ===
+print "--- Boolean Logic ---"
+print "true && false: " + toString(true && false)
+print "true || false: " + toString(true || false)
+print "!true: " + toString(!true)
+
+print "=== Test Complete ==="

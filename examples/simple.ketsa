@@ -1,0 +1,27 @@
+// Simple arithmetic
+let a = 10
+let b = 20
+print "Sum:"
+print a + b
+
+// Condition
+if (a < b) {
+    print "a < b"
+}
+
+// While loop
+let i = 0
+while (i < 3) {
+    print i
+    i += 1
+}
+
+// Function
+func greet(name: string): string {
+    return "Hello " + name
+}
+print greet("Ketsa")
+
+// Array
+let arr = [1, 2, 3]
+print len(arr)

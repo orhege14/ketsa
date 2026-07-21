@@ -1,0 +1,13 @@
+let name = "Ketsa"
+let version_num = 3
+let pi = 3.14
+let isAwesome = true
+const constant_val = 42
+let typed_var: int = 100
+
+print "=== Part 1 ==="
+print "Name: " + name
+print "Version: " + toString(version_num)
+print "Pi: " + toString(pi)
+print "Is Awesome: " + toString(isAwesome)
+print "Constant: " + toString(constant_val)

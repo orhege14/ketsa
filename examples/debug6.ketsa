@@ -1,0 +1,2 @@
+let version = 3
+print toString(version)

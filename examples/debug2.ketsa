@@ -1,0 +1,6 @@
+let name = "Ketsa"
+let version = 3
+let pi = 3.14
+let isAwesome = true
+
+print "Name: " + name
