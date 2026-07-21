@@ -1,4 +1,5 @@
 #include "VM.h"
+#include "../jit/JIT.h"
 
 #include "../runtime/values/NumberValue.h"
 #include "../runtime/values/FloatValue.h"
@@ -16,9 +17,10 @@
 #include <cmath>
 #include <algorithm>
 
-VM::VM(ErrorHandler* handler)
+VM::VM(ErrorHandler* handler, JITEngine* jit)
     : errorHandler(handler)
     , frameCount(0)
+    , jitEngine(jit)
 {
     globals = std::make_shared<Environment>(nullptr, errorHandler);
 
@@ -715,6 +717,10 @@ InterpretResult VM::interpret(FunctionProto* mainFunc)
 
             case OpCode::LOOP:
             {
+                if (jitEngine && cf->function)
+                {
+                    jitEngine->profileLoopIteration(cf->function->name);
+                }
                 cf->ip = cf->function->code.data() + instr.operand;
                 break;
             }
@@ -722,6 +728,13 @@ InterpretResult VM::interpret(FunctionProto* mainFunc)
             case OpCode::CALL:
             {
                 uint32_t argCount = instr.operand;
+
+                // Profile: record function call
+                if (jitEngine && cf->function)
+                {
+                    jitEngine->profileFunctionCall(cf->function->name);
+                }
+
                 auto* callee = peek(static_cast<int>(argCount));
                 if (!callee)
                 {
@@ -738,7 +751,6 @@ InterpretResult VM::interpret(FunctionProto* mainFunc)
                 }
                 else if (callee->getType() == ValueType::OBJECT)
                 {
-                    // Method call - do nothing for now
                     pop();
                 }
                 else

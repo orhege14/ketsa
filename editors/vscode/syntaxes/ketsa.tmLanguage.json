@@ -1,0 +1,91 @@
+{
+    "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+    "name": "Ketsa",
+    "scopeName": "source.ketsa",
+    "patterns": [
+        {
+            "include": "#comments"
+        },
+        {
+            "include": "#keywords"
+        },
+        {
+            "include": "#strings"
+        },
+        {
+            "include": "#numbers"
+        },
+        {
+            "include": "#functions"
+        }
+    ],
+    "repository": {
+        "keywords": {
+            "patterns": [{
+                "name": "keyword.control.ketsa",
+                "match": "\\b(if|else|elif|while|for|in|break|continue|return|match|case|switch|default)\\b"
+            }, {
+                "name": "keyword.declaration.ketsa",
+                "match": "\\b(let|const|func|class|struct|enum|interface|trait|import|from|as|export|package)\\b"
+            }, {
+                "name": "keyword.type.ketsa",
+                "match": "\\b(int|float|string|bool|void|any|char|double)\\b"
+            }, {
+                "name": "constant.language.ketsa",
+                "match": "\\b(true|false|null)\\b"
+            }, {
+                "name": "storage.modifier.ketsa",
+                "match": "\\b(public|private|protected|static|abstract|final|override|virtual|async|await)\\b"
+            }]
+        },
+        "strings": {
+            "patterns": [{
+                "name": "string.quoted.double.ketsa",
+                "begin": "\"",
+                "end": "\"",
+                "patterns": [{
+                    "name": "constant.character.escape.ketsa",
+                    "match": "\\\\."
+                }]
+            }, {
+                "name": "string.quoted.single.ketsa",
+                "begin": "'",
+                "end": "'",
+                "patterns": [{
+                    "name": "constant.character.escape.ketsa",
+                    "match": "\\\\."
+                }]
+            }]
+        },
+        "numbers": {
+            "patterns": [{
+                "name": "constant.numeric.integer.ketsa",
+                "match": "\\b[0-9]+\\b"
+            }, {
+                "name": "constant.numeric.float.ketsa",
+                "match": "\\b[0-9]+\\.[0-9]+\\b"
+            }]
+        },
+        "comments": {
+            "patterns": [{
+                "name": "comment.line.double-slash.ketsa",
+                "match": "//.*$"
+            }, {
+                "name": "comment.block.ketsa",
+                "begin": "/\\*",
+                "end": "\\*/"
+            }]
+        },
+        "functions": {
+            "patterns": [{
+                "name": "meta.function.ketsa",
+                "begin": "\\b(func)\\s+([a-zA-Z_][a-zA-Z0-9_]*)",
+                "beginCaptures": {
+                    "1": {"name": "keyword.declaration.ketsa"},
+                    "2": {"name": "entity.name.function.ketsa"}
+                },
+                "end": "\\{"
+            }]
+        }
+    }
+}

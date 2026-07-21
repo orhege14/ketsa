@@ -1,269 +1,125 @@
 # Ketsa Programming Language
 
-Ketsa is a custom programming language and interpreter written in **C++**.
+> Python'un kolaylığı, C++'ın hızı, Rust'ın güvenliği.
 
-The goal of Ketsa is to create a simple, powerful and extensible programming language with its own syntax, lexer, parser, AST system and interpreter.
+Ketsa is a modern general-purpose programming language that combines Python's elegant syntax with C++-level performance and Rust-inspired safety features.
+
+```ketsa
+func fibonacci(n: int): int {
+    if (n <= 1) return n
+    return fibonacci(n - 1) + fibonacci(n - 2)
+}
+
+print fibonacci(10)  // 55
+```
 
 ## Features
 
-Current features:
+- **Python-compatible syntax** with modern improvements
+- **Type-safe**: optional static typing with compile-time type checking
+- **High performance**: bytecode VM + tree-walking interpreter
+- **Pattern matching**: `match` with destructuring and guards
+- **Memory safe**: automatic memory management with ownership semantics
+- **Concurrent**: async/await, channels, actors (coming in v0.5)
+- **Cross-platform**: Windows, Linux, macOS
 
-- Lexer system
-- Parser system
-- AST (Abstract Syntax Tree)
-- Interpreter runtime
-- Variables
-- Numbers
-- Strings
-- Booleans
-- Print statement
-- Binary expressions
-- Compound assignment operators
+## Quick Start
 
-## Example
-
-Ketsa code:
-
-```ketsa
-let age = 20
-
-age *= 10
-
-print age
-```
-
-Output:
-
-```
-200
-```
-
----
-
-## How Ketsa Works
-
-Ketsa follows a compiler/interpreter pipeline:
-
-```
-Source Code
-     |
-     v
-Lexer
-     |
-     v
-Tokens
-     |
-     v
-Parser
-     |
-     v
-AST
-     |
-     v
-Interpreter
-     |
-     v
-Output
-```
-
-### Lexer
-
-The lexer reads the source code and converts it into tokens.
-
-Example:
-
-```ketsa
-let age = 10
-```
-
-becomes:
-
-```
-LET
-IDENTIFIER(age)
-EQUAL
-NUMBER(10)
-```
-
----
-
-### Parser
-
-The parser converts tokens into an Abstract Syntax Tree (AST).
-
-Example:
-
-```ketsa
-age *= 10
-```
-
-becomes:
-
-```
-BinaryExpressionNode
-
-Operator:
-    *=
-
-Left:
-    VariableAccessNode
-        age
-
-Right:
-    NumberNode
-        10
-```
-
----
-
-### Interpreter
-
-The interpreter executes the AST.
-
-Example:
-
-```
-age = 20
-
-age *= 10
-
-age = 200
-```
-
----
-
-# Project Structure
-
-```
-Ketsa Compiler/
-
-├── main.cpp
-│
-├── Lexer.h
-├── Lexer.cpp
-│
-├── Parser.h
-├── Parser.cpp
-│
-├── AST.h
-│
-├── Value.h
-│
-├── Interpreter.h
-├── Interpreter.cpp
-│
-└── test.ketsa
-```
-
----
-
-# Building
-
-## Windows (MSVC)
-
-Compile:
+### Install
 
 ```bash
-cl main.cpp Lexer.cpp Parser.cpp Interpreter.cpp
+git clone https://github.com/ketsa-lang/ketsa
+cd ketsa
+build.bat           # Windows
+# or
+chmod +x build.sh && ./build.sh  # Linux/macOS
 ```
 
-Run:
+### Run
 
 ```bash
-main.exe test.ketsa
+ketsa run examples/comprehensive.ketsa
+ketsa --version
+ketsa doctor         # System diagnostics
+ketsa new myapp      # Create a new project
 ```
 
----
+## Language Overview
 
-# Syntax
-
-## Variables
-
+### Variables
 ```ketsa
-let name = "Ege"
-let age = 12
+let name = "Ketsa"       # Type-inferred string
+let count: int = 42      # Explicit type annotation
+const PI = 3.14159       # Immutable constant
 ```
 
----
-
-## Print
-
+### Functions
 ```ketsa
-print "Hello"
+func greet(name: string): string {
+    return "Hello, " + name + "!"
+}
 ```
 
-or:
-
+### Control Flow
 ```ketsa
-let age = 20
-print age
+if (score >= 90) {
+    print "A"
+} else if (score >= 80) {
+    print "B"
+} else {
+    print "C"
+}
+
+while (count < 10) {
+    print count
+    count += 1
+}
+
+for (i in [1, 2, 3]) {
+    print i
+}
 ```
 
----
-
-## Operators
-
-Supported:
-
-```
-+
--
-*
-/
-%
+### Pattern Matching
+```ketsa
+match (value) {
+    case 1:
+        print "one"
+    case 2:
+        print "two"
+    else:
+        print "other"
+}
 ```
 
-Assignment:
+## Architecture
 
 ```
-=
-+=
--=
-*=
-/=
+Source → Lexer → Parser → Type Checker → Bytecode Compiler → VM / Interpreter → Output
 ```
 
-Special operators:
+| Component | Description |
+|-----------|-------------|
+| Lexer | Tokenizes source into 500+ token types |
+| Parser | Builds AST with precedence climbing |
+| Type Checker | Static semantic analysis |
+| Bytecode Compiler | AST → 64+ instruction bytecode |
+| VM | Stack-based virtual machine |
+| Interpreter | Tree-walking fallback |
 
-```
-?+=
-?-= 
-?*= 
-?**=
-```
+## Project Status
 
----
+| Phase | Feature | Status |
+|-------|---------|--------|
+| 0.3 | Type Checker + Bytecode VM | ✅ |
+| 0.4 | Generics & Interfaces | 🔄 |
+| 0.5 | Async Runtime | 📋 |
+| 0.6 | Standard Library | 📋 |
+| 0.7 | Package Manager | 📋 |
+| 0.8 | Tooling & IDE Support | 📋 |
+| 0.9 | JIT Compilation | 📋 |
+| 1.0 | Stable Release | 📋 |
 
-# Roadmap
+## License
 
-Future plans:
-
-- [ ] Better expression parser
-- [ ] Functions
-- [ ] If / Else statements
-- [ ] Loops
-- [ ] Arrays
-- [ ] Objects
-- [ ] Modules
-- [ ] Error reporting
-- [ ] Bytecode compiler
-- [ ] Virtual Machine
-
----
-
-# Language Goals
-
-Ketsa aims to be:
-
-- Simple like Python
-- Fast like C++
-- Structured like modern languages
-- Easy to extend
-
----
-
-# License
-
-Open source project.
-
-Created with C++.
+Open source. MIT license.

@@ -1,4 +1,26 @@
-*.obj
-*.exe
-*.pdb
+# Build
 build/
+*.exe
+*.obj
+*.lib
+*.pdb
+*.ilk
+ketsa.exe
+
+# IDE
+.vs/
+.vscode/
+.idea/
+*.user
+*.suo
+
+# Ketsa
+std/
+lib/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Project
+ketsa.toml

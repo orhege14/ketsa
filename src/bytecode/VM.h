@@ -10,6 +10,8 @@
 #include <unordered_map>
 #include <stack>
 
+class JITEngine;
+
 enum class InterpretResult
 {
     OK,
@@ -46,6 +48,9 @@ private:
     // Function cache
     std::vector<std::unique_ptr<FunctionProto>> functions;
 
+    // JIT engine
+    JITEngine* jitEngine;
+
     // Module cache
     std::unordered_map<std::string, std::shared_ptr<Environment>> moduleCache;
     std::vector<std::unique_ptr<Value>> moduleValues;
@@ -78,10 +83,11 @@ private:
     void runtimeError(ErrorCode code, const std::string& message);
 
 public:
-    VM(ErrorHandler* handler = nullptr);
+    VM(ErrorHandler* handler = nullptr, JITEngine* jit = nullptr);
     ~VM() = default;
 
     void setErrorHandler(ErrorHandler* handler) { errorHandler = handler; }
+    void setJITEngine(JITEngine* jit) { jitEngine = jit; }
 
     InterpretResult interpret(FunctionProto* mainFunc);
 

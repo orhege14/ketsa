@@ -1,0 +1,27 @@
+{
+    "name": "ketsa-lang",
+    "displayName": "Ketsa",
+    "description": "Ketsa programming language support",
+    "version": "0.3.0",
+    "publisher": "ketsa-lang",
+    "license": "MIT",
+    "engines": {
+        "vscode": "^1.80.0"
+    },
+    "categories": [
+        "Programming Languages"
+    ],
+    "contributes": {
+        "languages": [{
+            "id": "ketsa",
+            "aliases": ["Ketsa", "ketsa"],
+            "extensions": [".ketsa"],
+            "configuration": "./language-configuration.json"
+        }],
+        "grammars": [{
+            "language": "ketsa",
+            "scopeName": "source.ketsa",
+            "path": "./syntaxes/ketsa.tmLanguage.json"
+        }]
+    }
+}

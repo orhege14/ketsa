@@ -1,0 +1,111 @@
+name: Ketsa CI
+
+on:
+  push:
+    branches: [ main, develop ]
+    tags: [ 'v*' ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        os: [windows-latest, ubuntu-latest, macos-latest]
+        build-type: [Debug, Release]
+      fail-fast: false
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Setup CMake
+      uses: jwlawson/actions-setup-cmake@v2
+      with:
+        cmake-version: '3.20.x'
+
+    - name: Setup MSVC (Windows)
+      if: runner.os == 'Windows'
+      uses: ilammy/msvc-dev-cmd@v1
+
+    - name: Install Ninja (Ubuntu)
+      if: runner.os == 'Linux'
+      run: sudo apt-get install -y ninja-build
+
+    - name: Install Ninja (macOS)
+      if: runner.os == 'macOS'
+      run: brew install ninja
+
+    - name: Configure CMake
+      run: |
+        cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=${{ matrix.build-type }}
+
+    - name: Build
+      run: |
+        cmake --build build --config ${{ matrix.build-type }}
+
+    - name: Run Type Check
+      run: |
+        build/ketsa --check examples/comprehensive.ketsa
+
+    - name: Run Tests (Linux/macOS)
+      if: runner.os != 'Windows'
+      run: |
+        ./build.sh --test
+
+    - name: Run Tests (Windows)
+      if: runner.os == 'Windows'
+      run: |
+        build\ketsa.exe --check examples\comprehensive.ketsa
+        build\ketsa.exe --no-typecheck examples\comprehensive.ketsa
+
+    - name: Run System Doctor
+      run: |
+        build/ketsa doctor || true
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [windows-latest, ubuntu-latest, macos-latest]
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Build Release
+      run: |
+        cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+        cmake --build build --config Release
+
+    - name: Package Binary (Windows)
+      if: runner.os == 'Windows'
+      run: |
+        mkdir dist
+        copy build\ketsa.exe dist\ketsa-windows-x64.exe
+        copy README.md dist\
+        copy LICENSE dist\
+
+    - name: Package Binary (Linux)
+      if: runner.os == 'Linux'
+      run: |
+        mkdir -p dist
+        cp build/ketsa dist/ketsa-linux-x64
+        cp README.md dist/
+        cp LICENSE dist/
+
+    - name: Package Binary (macOS)
+      if: runner.os == 'macOS'
+      run: |
+        mkdir -p dist
+        cp build/ketsa dist/ketsa-macos-x64
+        cp README.md dist/
+        cp LICENSE dist/
+
+    - name: Upload Release Assets
+      uses: softprops/action-gh-release@v2
+      with:
+        files: dist/*
+        generate_release_notes: true
