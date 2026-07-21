@@ -1,0 +1,10 @@
+let val = 3
+match (val) {
+    case 1:
+        print "One"
+    case 3:
+        print "Three"
+    else:
+        print "Other"
+}
+print "done"

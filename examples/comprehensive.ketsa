@@ -1,0 +1,56 @@
+let name = "Ketsa"
+let ver = 3
+let pi_val = 3.14
+let awesome = true
+const con = 42
+let tv: int = 100
+
+print "=== Ketsa Language Test ==="
+print "Name: " + name
+print "Version: " + toString(ver)
+print "Pi: " + toString(pi_val)
+print "Is Awesome: " + toString(awesome)
+print "Constant: " + toString(con)
+
+let a = 10
+let b = 3
+print "a + b = " + toString(a + b)
+print "a - b = " + toString(a - b)
+print "a * b = " + toString(a * b)
+print "a / b = " + toString(a / b)
+
+let score = 85
+if (score >= 90) {
+    print "Grade: A"
+} else if (score >= 80) {
+    print "Grade: B"
+} else {
+    print "Grade: F"
+}
+
+let cnt = 0
+while (cnt < 3) {
+    print cnt
+    cnt += 1
+}
+
+func add(a: int, b: int): int {
+    return a + b
+}
+print "add(5,3) = " + toString(add(5, 3))
+
+let arr = [1, 2, 3]
+print "len: " + toString(len(arr))
+print "first: " + toString(arr[0])
+
+let val = 3
+match (val) {
+    case 1:
+        print "One"
+    case 3:
+        print "Three"
+    else:
+        print "Other"
+}
+
+print "=== Done ==="

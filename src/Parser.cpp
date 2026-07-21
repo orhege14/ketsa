@@ -198,21 +198,18 @@ std::unique_ptr<ASTNode> Parser::parseExpressionStatement()
 
 std::unique_ptr<ASTNode> Parser::parseVariableDeclaration(bool isConst)
 {
-    Token nameToken = consume(TokenType::IDENTIFIER, "Expected variable name");
-    // Allow some keywords as variable names
-    if (nameToken.type != TokenType::IDENTIFIER)
-    {
-        // If consume returned an error token, check if current is a usable keyword
-        if (match(TokenType::VERSION)) nameToken = previous();
-        else if (match(TokenType::GET)) nameToken = previous();
-        else if (match(TokenType::SET)) nameToken = previous();
-        else if (match(TokenType::LENGTH)) nameToken = previous();
-        else if (match(TokenType::READ)) nameToken = previous();
-        else if (match(TokenType::WRITE)) nameToken = previous();
-        else if (match(TokenType::FIND)) nameToken = previous();
-        else if (match(TokenType::STRING)) nameToken = previous();
-        // Fallback: use whatever peek() returns
-        else if (check(TokenType::IDENTIFIER)) nameToken = advance();
+    // Accept IDENTIFIER or common keywords as variable names
+    Token nameToken(TokenType::IDENTIFIER, "");
+    if (check(TokenType::IDENTIFIER)) {
+        nameToken = advance();
+    } else if (check(TokenType::PI)) {
+        nameToken = advance();
+        nameToken.type = TokenType::IDENTIFIER;
+    } else if (check(TokenType::VERSION)) {
+        nameToken = advance();
+        nameToken.type = TokenType::IDENTIFIER;
+    } else {
+        nameToken = consume(TokenType::IDENTIFIER, "Expected variable name");
     }
     std::string name = nameToken.value;
     int line = nameToken.line;
@@ -614,7 +611,8 @@ std::unique_ptr<ASTNode> Parser::parseMatch()
             {
                 consume(TokenType::COLON, "Expected ':' after case pattern");
                 while (!isAtEnd() && !check(TokenType::RBRACE) &&
-                       !check(TokenType::CASE) && !check(TokenType::DEFAULT))
+                       !check(TokenType::CASE) && !check(TokenType::DEFAULT) &&
+                       !check(TokenType::ELSE))
                 {
                     auto stmt = parseStatement();
                     if (stmt) caseNode.body.push_back(std::move(stmt));
@@ -634,7 +632,7 @@ std::unique_ptr<ASTNode> Parser::parseMatch()
             {
                 consume(TokenType::COLON, "Expected ':' after else");
                 while (!isAtEnd() && !check(TokenType::RBRACE) &&
-                       !check(TokenType::CASE))
+                       !check(TokenType::CASE) && !check(TokenType::ELSE))
                 {
                     auto stmt = parseStatement();
                     if (stmt) matchNode->elseBody.push_back(std::move(stmt));

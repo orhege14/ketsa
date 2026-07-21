@@ -1,0 +1,4 @@
+print "start"
+let x = 42
+let pi = 3.14
+print "done"

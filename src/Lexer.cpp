@@ -128,7 +128,7 @@ const std::unordered_map<std::string, TokenType> Lexer::keywords = {
     {"table", TokenType::TABLE},
     {"inf", TokenType::INF},
     {"nan", TokenType::NAN_VALUE},
-    {"pi", TokenType::PI},
+    // pi handled as identifier; constant value in std lib
     {"define", TokenType::DEFINE},
     {"undef", TokenType::UNDEF},
     {"ifdef", TokenType::IFDEF},
