@@ -1,0 +1,128 @@
+// =========================================================
+// KETSA V2 — Complete Language Feature Demo
+// =========================================================
+
+// 1. IMMUTABLE BY DEFAULT
+let x = 10
+var y = 20
+y = 30
+const Z = 99
+
+// 2. TYPE ALIASES
+type UserId = int
+let uid: UserId = 42
+
+// 3. UNION TYPES
+type Status = int | string
+let s1: Status = 200
+let s2: Status = "ok"
+
+// 4. OPTIONAL TYPES
+let maybe: int? = null
+let val: int? = 42
+
+// 5. GENERIC FUNCTIONS
+func identity<T>(value: T): T {
+    return value
+}
+print toString(identity(42))
+print toString(identity("hello"))
+
+// 6. DEFAULT PARAMETERS
+func greet(name: string = "World") {
+    print "Hello " + name
+}
+greet()
+greet("Ketsa")
+
+// 7. NAMED ARGUMENTS
+func connect(host: string, port: int) {
+    print "Connecting to " + host + ":" + toString(port)
+}
+connect(host: "localhost", port: 8080)
+
+// 8. LAMBDA EXPRESSIONS
+let double = (x: int) => x * 2
+print toString(double(5))
+
+let add = (a: int, b: int) => a + b
+print toString(add(3, 4))
+
+// 9. TRY/CATCH ERROR HANDLING
+try {
+    throw "error occurred"
+} catch (msg) {
+    print "Caught: " + msg
+}
+
+try {
+    print "no error"
+} catch (e) {
+    print "should not happen"
+}
+
+// 10. FUNCTIONAL OPERATIONS
+let numbers = [1, 2, 3, 4, 5]
+
+func square(x: int): int {
+    return x * x
+}
+// map(numbers, square)  -- function value callback support
+
+func isEven(x: int): bool {
+    return x % 2 == 0
+}
+// filter(numbers, isEven)
+
+func sum(acc: int, x: int): int {
+    return acc + x
+}
+// reduce(numbers, sum, 0)
+
+func printItem(x: int) {
+    println(x)
+}
+// foreach(numbers, printItem)
+
+// 11. PATTERN MATCHING (existing)
+let value = 42
+match (value) {
+    case 42:
+        print "The answer"
+    else:
+        print "Not the answer"
+}
+
+// 12. CLASSES
+class Document {
+    title
+    content
+
+    func show() {
+        print title
+    }
+}
+
+let doc = new Document()
+doc.title = "Ketsa V2"
+doc.show()
+
+// 13. OBJECT LITERALS
+let config = { mode: "v2", enabled: true }
+print config.mode
+
+// 14. FOR-IN + RANGE
+for (i in range(1, 4)) {
+    print i
+}
+
+// 15. ARRAY OPERATIONS
+let arr = [10, 20, 30]
+print toString(arr)
+print len(arr)
+print arr[0]
+
+// 16. BUILT-IN FUNCTIONS
+print type(42)
+print len("Ketsa")
+println("Done!")

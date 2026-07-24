@@ -122,9 +122,14 @@ private:
 
     bool isAssignable(TypeInfo target, TypeInfo source);
     TypeInfo resolveTypeParam(const TypeInfo& type);
+    TypeInfo resolveAlias(const TypeInfo& type);
 
     void checkFunctionDeclaration(FunctionDeclarationNode* node);
     void checkClassDeclaration(ClassDeclarationNode* node);
+    void checkLambda(LambdaNode* node);
+    void instantiateGenericFunction(FunctionSignature* sig, const std::vector<TypeInfo>& argTypes, TypeInfo& returnType);
+
+    TypeInfo getErrorLocation(ASTNode* node);
 
 public:
     explicit TypeChecker(ErrorHandler* handler = nullptr);

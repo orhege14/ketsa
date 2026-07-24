@@ -30,11 +30,15 @@ private:
     // Type parsing
     TypeInfo parseTypeAnnotation();
     std::optional<TypeInfo> tryParseTypeAnnotation();
+    TypeInfo parseType();
+    std::vector<TypeInfo> parseTypeList();
+    std::vector<std::string> parseGenericParams();
 
     // Statement parsing
     std::unique_ptr<ASTNode> parseStatement();
     std::unique_ptr<ASTNode> parseDeclaration();
-    std::unique_ptr<ASTNode> parseVariableDeclaration(bool isConst = false);
+    std::unique_ptr<ASTNode> parseVariableDeclaration(bool isConst = false, bool isMutable = false);
+    std::unique_ptr<ASTNode> parseTypeAlias();
     std::unique_ptr<ASTNode> parseBlock();
     std::unique_ptr<ASTNode> parseIf();
     std::unique_ptr<ASTNode> parseWhile();
@@ -50,6 +54,7 @@ private:
     std::unique_ptr<ASTNode> parseFunctionDeclaration();
     std::vector<std::unique_ptr<ASTNode>> parseFunctionBody();
     std::vector<ParameterNode> parseParameters();
+    std::unique_ptr<ASTNode> parseLambda();
 
     // Class parsing
     std::unique_ptr<ASTNode> parseClassDeclaration();
@@ -57,6 +62,10 @@ private:
     // Match parsing
     std::unique_ptr<ASTNode> parseMatch();
     MatchPattern parsePattern();
+
+    // Error handling
+    std::unique_ptr<ASTNode> parseTry();
+    std::unique_ptr<ASTNode> parseThrow();
 
     // Import parsing
     std::unique_ptr<ASTNode> parseImport();

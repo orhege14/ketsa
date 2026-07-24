@@ -5,6 +5,7 @@
 const std::unordered_map<std::string, TokenType> Lexer::keywords = {
     {"print", TokenType::PRINT},
     {"let", TokenType::LET},
+    {"var", TokenType::VAR},
     {"const", TokenType::CONST},
     {"if", TokenType::IF},
     {"else", TokenType::ELSE},
@@ -31,6 +32,8 @@ const std::unordered_map<std::string, TokenType> Lexer::keywords = {
     {"case", TokenType::CASE},
     {"default", TokenType::DEFAULT},
     {"match", TokenType::MATCH},
+    {"type", TokenType::TYPE_KW},
+    {"where", TokenType::WHERE_KW},
     {"int", TokenType::INT_TYPE},
     {"float", TokenType::FLOAT_TYPE},
     {"string", TokenType::STRING_TYPE},
@@ -386,9 +389,9 @@ std::vector<Token> Lexer::tokenize()
         if (c == '?' && peekNext() == '-') { advance(); advance(); continue; }
         if (c == '?' && peekNext() == '*') { advance(); advance(); continue; }
 
-        if (c == '<' && peekNext() == '=' && peekNext() != '>') { addToken(tokens, TokenType::SMALLER_EQUAL, "<="); advance(); advance(); continue; }
-        if (c == '<' && peekNext() == '<') { addToken(tokens, TokenType::SHIFT_LEFT, "<<"); advance(); advance(); continue; }
         if (c == '<' && peekNext() == '=' && source[position + 2] == '>') { addToken(tokens, TokenType::THREE_WAY_COMPARE, "<=>"); advance(); advance(); advance(); continue; }
+        if (c == '<' && peekNext() == '=') { addToken(tokens, TokenType::SMALLER_EQUAL, "<="); advance(); advance(); continue; }
+        if (c == '<' && peekNext() == '<') { addToken(tokens, TokenType::SHIFT_LEFT, "<<"); advance(); advance(); continue; }
         if (c == '>' && peekNext() == '=') { addToken(tokens, TokenType::BIGGER_EQUAL, ">="); advance(); advance(); continue; }
         if (c == '>' && peekNext() == '>') { addToken(tokens, TokenType::SHIFT_RIGHT, ">>"); advance(); advance(); continue; }
 
@@ -412,8 +415,8 @@ std::vector<Token> Lexer::tokenize()
         if (c == '^' && peekNext() == '^') { addToken(tokens, TokenType::XOR_XOR, "^^"); advance(); advance(); continue; }
         if (c == '^' && peekNext() == '=') { addToken(tokens, TokenType::XOR_EQUAL, "^="); advance(); advance(); continue; }
 
-        if (c == '.' && peekNext() == '.') { advance(); advance(); continue; } // skip .. for now
         if (c == '.' && peekNext() == '.' && source[position + 2] == '.') { addToken(tokens, TokenType::SPREAD, "..."); advance(); advance(); advance(); continue; }
+        if (c == '.' && peekNext() == '.') { advance(); advance(); continue; } // skip .. for now
 
         if (c == '=' && peekNext() == '>') { addToken(tokens, TokenType::FAT_ARROW, "=>"); advance(); advance(); continue; }
         if (c == '=' && peekNext() == '=' && source[position + 2] == '=') { advance(); advance(); advance(); continue; } // === skip

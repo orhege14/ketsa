@@ -25,7 +25,16 @@ enum class TypeKind : uint8_t
     OBJECT,
     FUNCTION,
     CLASS,
-    MODULE
+    MODULE,
+    UNION,
+    OPTIONAL,
+    TYPE_PARAM
+};
+
+struct TypeConstraint
+{
+    std::string typeParamName;
+    std::string boundName;
 };
 
 struct TypeInfo
@@ -35,6 +44,10 @@ struct TypeInfo
     std::unique_ptr<TypeInfo> elementType;
     std::vector<TypeInfo> paramTypes;
     std::unique_ptr<TypeInfo> returnType;
+    std::unique_ptr<TypeInfo> optionalType;
+    std::vector<TypeInfo> unionTypes;
+    std::optional<TypeConstraint> constraint;
+    std::vector<std::string> genericParams;
 
     explicit TypeInfo(TypeKind kind = TypeKind::ANY)
         : kind(kind) {}
@@ -45,6 +58,10 @@ struct TypeInfo
         , elementType(other.elementType ? std::make_unique<TypeInfo>(*other.elementType) : nullptr)
         , paramTypes(other.paramTypes)
         , returnType(other.returnType ? std::make_unique<TypeInfo>(*other.returnType) : nullptr)
+        , optionalType(other.optionalType ? std::make_unique<TypeInfo>(*other.optionalType) : nullptr)
+        , unionTypes(other.unionTypes)
+        , constraint(other.constraint)
+        , genericParams(other.genericParams)
     {
     }
 
@@ -57,6 +74,10 @@ struct TypeInfo
             elementType = other.elementType ? std::make_unique<TypeInfo>(*other.elementType) : nullptr;
             paramTypes = other.paramTypes;
             returnType = other.returnType ? std::make_unique<TypeInfo>(*other.returnType) : nullptr;
+            optionalType = other.optionalType ? std::make_unique<TypeInfo>(*other.optionalType) : nullptr;
+            unionTypes = other.unionTypes;
+            constraint = other.constraint;
+            genericParams = other.genericParams;
         }
         return *this;
     }
@@ -77,6 +98,7 @@ struct TypeInfo
             case TypeKind::VOID:    return "void";
             case TypeKind::ANY:     return "any";
             case TypeKind::NULL_TYPE: return "null";
+            case TypeKind::TYPE_PARAM: return name.value_or("T");
             case TypeKind::ARRAY:
                 return "[" + (elementType ? elementType->toString() : "any") + "]";
             case TypeKind::OBJECT:
@@ -92,8 +114,20 @@ struct TypeInfo
                 s += ") -> " + (returnType ? returnType->toString() : "void");
                 return s;
             }
-            case TypeKind::CLASS:   return "class";
+            case TypeKind::CLASS:   return name.value_or("class");
             case TypeKind::MODULE:  return "module";
+            case TypeKind::OPTIONAL:
+                return (optionalType ? optionalType->toString() : "any") + "?";
+            case TypeKind::UNION:
+            {
+                std::string s;
+                for (size_t i = 0; i < unionTypes.size(); i++)
+                {
+                    if (i > 0) s += " | ";
+                    s += unionTypes[i].toString();
+                }
+                return s;
+            }
         }
         return "any";
     }
@@ -120,19 +154,51 @@ struct TypeInfo
         return t;
     }
 
+    static TypeInfo createOptional(std::unique_ptr<TypeInfo> inner)
+    {
+        TypeInfo t(TypeKind::OPTIONAL);
+        t.optionalType = std::move(inner);
+        return t;
+    }
+
+    static TypeInfo createUnion(std::vector<TypeInfo> types)
+    {
+        TypeInfo t(TypeKind::UNION);
+        t.unionTypes = std::move(types);
+        return t;
+    }
+
+    static TypeInfo createTypeParam(std::string paramName)
+    {
+        TypeInfo t(TypeKind::TYPE_PARAM);
+        t.name = std::move(paramName);
+        return t;
+    }
+
     bool operator==(const TypeInfo& other) const
     {
         if (kind != other.kind) return false;
-        if (kind == TypeKind::OBJECT || kind == TypeKind::CLASS)
-            return name == other.name;
-        if (kind == TypeKind::ARRAY)
-            return (elementType == nullptr && other.elementType == nullptr) ||
-                   (elementType && other.elementType && *elementType == *other.elementType);
-        if (kind == TypeKind::FUNCTION)
-            return paramTypes == other.paramTypes &&
-                   ((returnType == nullptr && other.returnType == nullptr) ||
-                    (returnType && other.returnType && *returnType == *other.returnType));
-        return true;
+        switch (kind)
+        {
+            case TypeKind::OBJECT:
+            case TypeKind::CLASS:
+            case TypeKind::TYPE_PARAM:
+                return name == other.name;
+            case TypeKind::ARRAY:
+                return (elementType == nullptr && other.elementType == nullptr) ||
+                       (elementType && other.elementType && *elementType == *other.elementType);
+            case TypeKind::FUNCTION:
+                return paramTypes == other.paramTypes &&
+                       ((returnType == nullptr && other.returnType == nullptr) ||
+                        (returnType && other.returnType && *returnType == *other.returnType));
+            case TypeKind::OPTIONAL:
+                return (optionalType == nullptr && other.optionalType == nullptr) ||
+                       (optionalType && other.optionalType && *optionalType == *other.optionalType);
+            case TypeKind::UNION:
+                return unionTypes == other.unionTypes;
+            default:
+                return true;
+        }
     }
 
     bool operator!=(const TypeInfo& other) const { return !(*this == other); }
@@ -183,7 +249,6 @@ enum class NodeType : uint8_t
 
     // Classes / Objects
     CLASS_DECLARATION,
-    CONSTRUCTOR,
     METHOD_DECLARATION,
     OBJECT_LITERAL,
     MEMBER_ACCESS,
@@ -199,11 +264,20 @@ enum class NodeType : uint8_t
     // Modules
     IMPORT_STATEMENT,
     FROM_IMPORT,
-    MODULE_DECLARATION,
 
     // Pattern Matching
     MATCH,
     MATCH_CASE,
+
+    // Type System
+    TYPE_ALIAS,
+    LAMBDA,
+    NAMED_ARGUMENT,
+
+    // Error Handling
+    TRY,
+    CATCH,
+    THROW,
 
     // Program
     PROGRAM
@@ -219,6 +293,7 @@ struct ASTNode
         : type(type), line(line), column(column) {}
 
     virtual ~ASTNode() = default;
+    virtual std::unique_ptr<ASTNode> clone() const = 0;
 };
 
 // ============================================================
@@ -231,6 +306,11 @@ struct NumberNode : ASTNode
 
     explicit NumberNode(int64_t value, int line = 0, int column = 0)
         : ASTNode(NodeType::NUMBER_LITERAL, line, column), value(value) {}
+
+    std::unique_ptr<ASTNode> clone() const override
+    {
+        return std::make_unique<NumberNode>(value, line, column);
+    }
 };
 
 struct FloatNode : ASTNode
@@ -239,6 +319,11 @@ struct FloatNode : ASTNode
 
     explicit FloatNode(double value, int line = 0, int column = 0)
         : ASTNode(NodeType::FLOAT_LITERAL, line, column), value(value) {}
+
+    std::unique_ptr<ASTNode> clone() const override
+    {
+        return std::make_unique<FloatNode>(value, line, column);
+    }
 };
 
 struct StringNode : ASTNode
@@ -247,6 +332,11 @@ struct StringNode : ASTNode
 
     explicit StringNode(std::string value, int line = 0, int column = 0)
         : ASTNode(NodeType::STRING_LITERAL, line, column), value(std::move(value)) {}
+
+    std::unique_ptr<ASTNode> clone() const override
+    {
+        return std::make_unique<StringNode>(value, line, column);
+    }
 };
 
 struct BooleanNode : ASTNode
@@ -255,6 +345,11 @@ struct BooleanNode : ASTNode
 
     explicit BooleanNode(bool value, int line = 0, int column = 0)
         : ASTNode(NodeType::BOOLEAN_LITERAL, line, column), value(value) {}
+
+    std::unique_ptr<ASTNode> clone() const override
+    {
+        return std::make_unique<BooleanNode>(value, line, column);
+    }
 };
 
 struct CharNode : ASTNode
@@ -263,12 +358,22 @@ struct CharNode : ASTNode
 
     explicit CharNode(char value, int line = 0, int column = 0)
         : ASTNode(NodeType::CHAR_LITERAL, line, column), value(value) {}
+
+    std::unique_ptr<ASTNode> clone() const override
+    {
+        return std::make_unique<CharNode>(value, line, column);
+    }
 };
 
 struct NullNode : ASTNode
 {
     explicit NullNode(int line = 0, int column = 0)
         : ASTNode(NodeType::NULL_LITERAL, line, column) {}
+
+    std::unique_ptr<ASTNode> clone() const override
+    {
+        return std::make_unique<NullNode>(line, column);
+    }
 };
 
 // ============================================================
@@ -281,19 +386,30 @@ struct VariableDeclarationNode : ASTNode
     std::unique_ptr<ASTNode> initializer;
     std::optional<TypeInfo> declaredType;
     bool isConst;
+    bool isMutable;
 
     VariableDeclarationNode(
         std::string name,
         std::unique_ptr<ASTNode> initializer,
         std::optional<TypeInfo> declaredType = std::nullopt,
         bool isConst = false,
+        bool isMutable = false,
         int line = 0,
         int column = 0)
         : ASTNode(NodeType::VARIABLE_DECLARATION, line, column)
         , name(std::move(name))
         , initializer(std::move(initializer))
         , declaredType(std::move(declaredType))
-        , isConst(isConst) {}
+        , isConst(isConst)
+        , isMutable(isMutable) {}
+
+    std::unique_ptr<ASTNode> clone() const override
+    {
+        return std::make_unique<VariableDeclarationNode>(
+            name,
+            initializer ? initializer->clone() : nullptr,
+            declaredType, isConst, isMutable, line, column);
+    }
 };
 
 struct VariableAccessNode : ASTNode
@@ -302,6 +418,11 @@ struct VariableAccessNode : ASTNode
 
     explicit VariableAccessNode(std::string name, int line = 0, int column = 0)
         : ASTNode(NodeType::VARIABLE_ACCESS, line, column), name(std::move(name)) {}
+
+    std::unique_ptr<ASTNode> clone() const override
+    {
+        return std::make_unique<VariableAccessNode>(name, line, column);
+    }
 };
 
 struct AssignmentNode : ASTNode
@@ -316,6 +437,12 @@ struct AssignmentNode : ASTNode
         , name(std::move(name))
         , value(std::move(value))
         , op(std::move(op)) {}
+
+    std::unique_ptr<ASTNode> clone() const override
+    {
+        return std::make_unique<AssignmentNode>(
+            name, value ? value->clone() : nullptr, op, line, column);
+    }
 };
 
 // ============================================================
@@ -334,6 +461,12 @@ struct UnaryExpressionNode : ASTNode
         , op(std::move(op))
         , operand(std::move(operand))
         , prefix(prefix) {}
+
+    std::unique_ptr<ASTNode> clone() const override
+    {
+        return std::make_unique<UnaryExpressionNode>(
+            op, operand ? operand->clone() : nullptr, prefix, line, column);
+    }
 };
 
 struct BinaryExpressionNode : ASTNode
@@ -348,6 +481,15 @@ struct BinaryExpressionNode : ASTNode
         , op(std::move(op))
         , left(std::move(left))
         , right(std::move(right)) {}
+
+    std::unique_ptr<ASTNode> clone() const override
+    {
+        return std::make_unique<BinaryExpressionNode>(
+            op,
+            left ? left->clone() : nullptr,
+            right ? right->clone() : nullptr,
+            line, column);
+    }
 };
 
 // ============================================================
@@ -361,6 +503,12 @@ struct ExpressionStatementNode : ASTNode
     explicit ExpressionStatementNode(std::unique_ptr<ASTNode> expression, int line = 0, int column = 0)
         : ASTNode(NodeType::EXPRESSION_STATEMENT, line, column)
         , expression(std::move(expression)) {}
+
+    std::unique_ptr<ASTNode> clone() const override
+    {
+        return std::make_unique<ExpressionStatementNode>(
+            expression ? expression->clone() : nullptr, line, column);
+    }
 };
 
 struct BlockNode : ASTNode
@@ -369,6 +517,14 @@ struct BlockNode : ASTNode
 
     BlockNode(int line = 0, int column = 0)
         : ASTNode(NodeType::BLOCK, line, column) {}
+
+    std::unique_ptr<ASTNode> clone() const override
+    {
+        auto block = std::make_unique<BlockNode>(line, column);
+        for (const auto& stmt : statements)
+            block->statements.push_back(stmt ? stmt->clone() : nullptr);
+        return block;
+    }
 };
 
 struct PrintNode : ASTNode
@@ -378,6 +534,12 @@ struct PrintNode : ASTNode
     explicit PrintNode(std::unique_ptr<ASTNode> expression, int line = 0, int column = 0)
         : ASTNode(NodeType::PRINT, line, column)
         , expression(std::move(expression)) {}
+
+    std::unique_ptr<ASTNode> clone() const override
+    {
+        return std::make_unique<PrintNode>(
+            expression ? expression->clone() : nullptr, line, column);
+    }
 };
 
 // ============================================================
@@ -393,6 +555,17 @@ struct IfNode : ASTNode
     IfNode(std::unique_ptr<ASTNode> condition, int line = 0, int column = 0)
         : ASTNode(NodeType::IF, line, column)
         , condition(std::move(condition)) {}
+
+    std::unique_ptr<ASTNode> clone() const override
+    {
+        auto ifNode = std::make_unique<IfNode>(
+            condition ? condition->clone() : nullptr, line, column);
+        for (const auto& stmt : thenBlock)
+            ifNode->thenBlock.push_back(stmt ? stmt->clone() : nullptr);
+        for (const auto& stmt : elseBlock)
+            ifNode->elseBlock.push_back(stmt ? stmt->clone() : nullptr);
+        return ifNode;
+    }
 };
 
 struct WhileNode : ASTNode
@@ -403,6 +576,15 @@ struct WhileNode : ASTNode
     WhileNode(std::unique_ptr<ASTNode> condition, int line = 0, int column = 0)
         : ASTNode(NodeType::WHILE, line, column)
         , condition(std::move(condition)) {}
+
+    std::unique_ptr<ASTNode> clone() const override
+    {
+        auto whileNode = std::make_unique<WhileNode>(
+            condition ? condition->clone() : nullptr, line, column);
+        for (const auto& stmt : body)
+            whileNode->body.push_back(stmt ? stmt->clone() : nullptr);
+        return whileNode;
+    }
 };
 
 struct ForNode : ASTNode
@@ -415,18 +597,37 @@ struct ForNode : ASTNode
         : ASTNode(NodeType::FOR, line, column)
         , variable(std::move(variable))
         , iterable(std::move(iterable)) {}
+
+    std::unique_ptr<ASTNode> clone() const override
+    {
+        auto forNode = std::make_unique<ForNode>(
+            variable, iterable ? iterable->clone() : nullptr, line, column);
+        for (const auto& stmt : body)
+            forNode->body.push_back(stmt ? stmt->clone() : nullptr);
+        return forNode;
+    }
 };
 
 struct BreakNode : ASTNode
 {
     explicit BreakNode(int line = 0, int column = 0)
         : ASTNode(NodeType::BREAK, line, column) {}
+
+    std::unique_ptr<ASTNode> clone() const override
+    {
+        return std::make_unique<BreakNode>(line, column);
+    }
 };
 
 struct ContinueNode : ASTNode
 {
     explicit ContinueNode(int line = 0, int column = 0)
         : ASTNode(NodeType::CONTINUE, line, column) {}
+
+    std::unique_ptr<ASTNode> clone() const override
+    {
+        return std::make_unique<ContinueNode>(line, column);
+    }
 };
 
 struct SwitchCase
@@ -444,6 +645,23 @@ struct SwitchNode : ASTNode
     SwitchNode(std::unique_ptr<ASTNode> expression, int line = 0, int column = 0)
         : ASTNode(NodeType::SWITCH, line, column)
         , expression(std::move(expression)) {}
+
+    std::unique_ptr<ASTNode> clone() const override
+    {
+        auto switchNode = std::make_unique<SwitchNode>(
+            expression ? expression->clone() : nullptr, line, column);
+        for (const auto& case_ : cases)
+        {
+            SwitchCase sc;
+            sc.value = case_.value ? case_.value->clone() : nullptr;
+            for (const auto& stmt : case_.body)
+                sc.body.push_back(stmt ? stmt->clone() : nullptr);
+            switchNode->cases.push_back(std::move(sc));
+        }
+        for (const auto& stmt : defaultCase)
+            switchNode->defaultCase.push_back(stmt ? stmt->clone() : nullptr);
+        return switchNode;
+    }
 };
 
 // ============================================================
@@ -479,6 +697,36 @@ struct MatchCaseNode : ASTNode
 
     MatchCaseNode(int line = 0, int column = 0)
         : ASTNode(NodeType::MATCH_CASE, line, column) {}
+
+    std::unique_ptr<ASTNode> clone() const override
+    {
+        auto mcn = std::make_unique<MatchCaseNode>(line, column);
+        mcn->pattern.kind = pattern.kind;
+        mcn->pattern.variableName = pattern.variableName;
+        mcn->pattern.literal = pattern.literal ? pattern.literal->clone() : nullptr;
+        mcn->pattern.guard = pattern.guard ? pattern.guard->clone() : nullptr;
+        for (const auto& sp : pattern.subPatterns)
+        {
+            MatchPattern cp;
+            cp.kind = sp.kind;
+            cp.variableName = sp.variableName;
+            cp.literal = sp.literal ? sp.literal->clone() : nullptr;
+            cp.guard = sp.guard ? sp.guard->clone() : nullptr;
+            mcn->pattern.subPatterns.push_back(std::move(cp));
+        }
+        for (const auto& [key, op] : pattern.objectPatterns)
+        {
+            MatchPattern cp;
+            cp.kind = op.kind;
+            cp.variableName = op.variableName;
+            cp.literal = op.literal ? op.literal->clone() : nullptr;
+            cp.guard = op.guard ? op.guard->clone() : nullptr;
+            mcn->pattern.objectPatterns.emplace_back(key, std::move(cp));
+        }
+        for (const auto& stmt : body)
+            mcn->body.push_back(stmt ? stmt->clone() : nullptr);
+        return mcn;
+    }
 };
 
 struct MatchNode : ASTNode
@@ -490,6 +738,21 @@ struct MatchNode : ASTNode
     MatchNode(std::unique_ptr<ASTNode> expression, int line = 0, int column = 0)
         : ASTNode(NodeType::MATCH, line, column)
         , expression(std::move(expression)) {}
+
+    std::unique_ptr<ASTNode> clone() const override
+    {
+        auto mn = std::make_unique<MatchNode>(
+            expression ? expression->clone() : nullptr, line, column);
+        for (const auto& c : cases)
+        {
+            auto cloned = c.clone();
+            std::unique_ptr<MatchCaseNode> mcn(static_cast<MatchCaseNode*>(cloned.release()));
+            mn->cases.push_back(std::move(*mcn));
+        }
+        for (const auto& stmt : elseBody)
+            mn->elseBody.push_back(stmt ? stmt->clone() : nullptr);
+        return mn;
+    }
 };
 
 // ============================================================
@@ -500,9 +763,30 @@ struct ParameterNode
 {
     std::string name;
     TypeInfo type;
+    std::unique_ptr<ASTNode> defaultValue;
+
+    ParameterNode() : type(TypeKind::ANY) {}
 
     ParameterNode(std::string name, TypeInfo type = TypeInfo(TypeKind::ANY))
         : name(std::move(name)), type(std::move(type)) {}
+
+    ParameterNode(const ParameterNode& other)
+        : name(other.name), type(other.type)
+        , defaultValue(other.defaultValue ? other.defaultValue->clone() : nullptr) {}
+
+    ParameterNode& operator=(const ParameterNode& other)
+    {
+        if (this != &other)
+        {
+            name = other.name;
+            type = other.type;
+            defaultValue = other.defaultValue ? other.defaultValue->clone() : nullptr;
+        }
+        return *this;
+    }
+
+    ParameterNode(ParameterNode&&) = default;
+    ParameterNode& operator=(ParameterNode&&) = default;
 };
 
 struct FunctionDeclarationNode : ASTNode
@@ -511,6 +795,8 @@ struct FunctionDeclarationNode : ASTNode
     std::vector<ParameterNode> parameters;
     TypeInfo returnType;
     std::vector<std::unique_ptr<ASTNode>> body;
+    std::vector<std::string> genericParams;
+    std::vector<TypeConstraint> genericConstraints;
 
     FunctionDeclarationNode()
         : ASTNode(NodeType::FUNCTION_DECLARATION, 0, 0)
@@ -523,16 +809,55 @@ struct FunctionDeclarationNode : ASTNode
 
     FunctionDeclarationNode(FunctionDeclarationNode&&) = default;
     FunctionDeclarationNode& operator=(FunctionDeclarationNode&&) = default;
+
+    std::unique_ptr<ASTNode> clone() const override
+    {
+        auto func = std::make_unique<FunctionDeclarationNode>(name, line, column);
+        func->parameters = parameters;
+        func->returnType = returnType;
+        func->genericParams = genericParams;
+        func->genericConstraints = genericConstraints;
+        for (const auto& stmt : body)
+            func->body.push_back(stmt ? stmt->clone() : nullptr);
+        return func;
+    }
+};
+
+struct NamedArgumentNode : ASTNode
+{
+    std::string name;
+    std::unique_ptr<ASTNode> value;
+
+    NamedArgumentNode(std::string name, std::unique_ptr<ASTNode> value, int line = 0, int column = 0)
+        : ASTNode(NodeType::NAMED_ARGUMENT, line, column)
+        , name(std::move(name))
+        , value(std::move(value)) {}
+
+    std::unique_ptr<ASTNode> clone() const override
+    {
+        return std::make_unique<NamedArgumentNode>(name, value ? value->clone() : nullptr, line, column);
+    }
 };
 
 struct FunctionCallNode : ASTNode
 {
     std::string functionName;
     std::vector<std::unique_ptr<ASTNode>> arguments;
+    std::vector<NamedArgumentNode> namedArguments;
 
     FunctionCallNode(std::string functionName, int line = 0, int column = 0)
         : ASTNode(NodeType::FUNCTION_CALL, line, column)
         , functionName(std::move(functionName)) {}
+
+    std::unique_ptr<ASTNode> clone() const override
+    {
+        auto fc = std::make_unique<FunctionCallNode>(functionName, line, column);
+        for (const auto& arg : arguments)
+            fc->arguments.push_back(arg ? arg->clone() : nullptr);
+        for (const auto& na : namedArguments)
+            fc->namedArguments.push_back(NamedArgumentNode(na.name, na.value ? na.value->clone() : nullptr, line, column));
+        return fc;
+    }
 };
 
 struct ReturnNode : ASTNode
@@ -542,6 +867,105 @@ struct ReturnNode : ASTNode
     explicit ReturnNode(std::unique_ptr<ASTNode> value, int line = 0, int column = 0)
         : ASTNode(NodeType::RETURN, line, column)
         , value(std::move(value)) {}
+
+    std::unique_ptr<ASTNode> clone() const override
+    {
+        return std::make_unique<ReturnNode>(
+            value ? value->clone() : nullptr, line, column);
+    }
+};
+
+struct LambdaNode : ASTNode
+{
+    std::vector<ParameterNode> parameters;
+    TypeInfo returnType;
+    std::vector<std::unique_ptr<ASTNode>> body;
+    bool isExpressionBody;
+
+    LambdaNode(int line = 0, int column = 0)
+        : ASTNode(NodeType::LAMBDA, line, column)
+        , returnType(TypeKind::ANY)
+        , isExpressionBody(false) {}
+
+    LambdaNode(LambdaNode&&) = default;
+
+    std::unique_ptr<ASTNode> clone() const override
+    {
+        auto ln = std::make_unique<LambdaNode>(line, column);
+        ln->parameters = parameters;
+        ln->returnType = returnType;
+        ln->isExpressionBody = isExpressionBody;
+        for (const auto& stmt : body)
+            ln->body.push_back(stmt ? stmt->clone() : nullptr);
+        return ln;
+    }
+};
+
+struct CatchClause
+{
+    std::string variableName;
+    TypeInfo errorType;
+    std::vector<std::unique_ptr<ASTNode>> body;
+};
+
+struct TryNode : ASTNode
+{
+    std::vector<std::unique_ptr<ASTNode>> tryBody;
+    std::vector<CatchClause> catchClauses;
+    std::vector<std::unique_ptr<ASTNode>> finallyBody;
+
+    TryNode(int line = 0, int column = 0)
+        : ASTNode(NodeType::TRY, line, column) {}
+
+    std::unique_ptr<ASTNode> clone() const override
+    {
+        auto tn = std::make_unique<TryNode>(line, column);
+        for (const auto& stmt : tryBody)
+            tn->tryBody.push_back(stmt ? stmt->clone() : nullptr);
+        for (const auto& cc : catchClauses)
+        {
+            CatchClause c;
+            c.variableName = cc.variableName;
+            c.errorType = cc.errorType;
+            for (const auto& stmt : cc.body)
+                c.body.push_back(stmt ? stmt->clone() : nullptr);
+            tn->catchClauses.push_back(std::move(c));
+        }
+        for (const auto& stmt : finallyBody)
+            tn->finallyBody.push_back(stmt ? stmt->clone() : nullptr);
+        return tn;
+    }
+};
+
+struct ThrowNode : ASTNode
+{
+    std::unique_ptr<ASTNode> expression;
+
+    ThrowNode(std::unique_ptr<ASTNode> expression, int line = 0, int column = 0)
+        : ASTNode(NodeType::THROW, line, column)
+        , expression(std::move(expression)) {}
+
+    std::unique_ptr<ASTNode> clone() const override
+    {
+        return std::make_unique<ThrowNode>(
+            expression ? expression->clone() : nullptr, line, column);
+    }
+};
+
+struct TypeAliasNode : ASTNode
+{
+    std::string aliasName;
+    TypeInfo underlyingType;
+
+    TypeAliasNode(std::string aliasName, TypeInfo underlyingType, int line = 0, int column = 0)
+        : ASTNode(NodeType::TYPE_ALIAS, line, column)
+        , aliasName(std::move(aliasName))
+        , underlyingType(std::move(underlyingType)) {}
+
+    std::unique_ptr<ASTNode> clone() const override
+    {
+        return std::make_unique<TypeAliasNode>(aliasName, underlyingType, line, column);
+    }
 };
 
 // ============================================================
@@ -565,12 +989,37 @@ struct ClassDeclarationNode : ASTNode
     std::vector<std::string> fields;
     std::vector<MethodDeclaration> methods;
     std::optional<std::string> baseClass;
+    std::vector<std::string> genericParams;
+    std::vector<TypeConstraint> genericConstraints;
+    std::vector<std::string> implements;
 
     ClassDeclarationNode(ClassDeclarationNode&&) = default;
 
     explicit ClassDeclarationNode(std::string name, int line = 0, int column = 0)
         : ASTNode(NodeType::CLASS_DECLARATION, line, column)
         , name(std::move(name)) {}
+
+    std::unique_ptr<ASTNode> clone() const override
+    {
+        auto cd = std::make_unique<ClassDeclarationNode>(name, line, column);
+        cd->constructorParams = constructorParams;
+        for (const auto& stmt : constructorBody)
+            cd->constructorBody.push_back(stmt ? stmt->clone() : nullptr);
+        cd->fields = fields;
+        cd->genericParams = genericParams;
+        cd->genericConstraints = genericConstraints;
+        cd->implements = implements;
+        for (const auto& m : methods)
+        {
+            MethodDeclaration md;
+            auto cloned = m.function.clone();
+            if (cloned)
+                md.function = std::move(*static_cast<FunctionDeclarationNode*>(cloned.get()));
+            cd->methods.push_back(std::move(md));
+        }
+        cd->baseClass = baseClass;
+        return cd;
+    }
 };
 
 struct ObjectLiteralNode : ASTNode
@@ -579,6 +1028,14 @@ struct ObjectLiteralNode : ASTNode
 
     ObjectLiteralNode(int line = 0, int column = 0)
         : ASTNode(NodeType::OBJECT_LITERAL, line, column) {}
+
+    std::unique_ptr<ASTNode> clone() const override
+    {
+        auto ol = std::make_unique<ObjectLiteralNode>(line, column);
+        for (const auto& [key, val] : properties)
+            ol->properties.emplace_back(key, val ? val->clone() : nullptr);
+        return ol;
+    }
 };
 
 struct MemberAccessNode : ASTNode
@@ -591,6 +1048,12 @@ struct MemberAccessNode : ASTNode
         : ASTNode(NodeType::MEMBER_ACCESS, line, column)
         , object(std::move(object))
         , member(std::move(member)) {}
+
+    std::unique_ptr<ASTNode> clone() const override
+    {
+        return std::make_unique<MemberAccessNode>(
+            object ? object->clone() : nullptr, member, line, column);
+    }
 };
 
 struct MemberAssignmentNode : ASTNode
@@ -605,6 +1068,13 @@ struct MemberAssignmentNode : ASTNode
         , object(std::move(object))
         , member(std::move(member))
         , value(std::move(value)) {}
+
+    std::unique_ptr<ASTNode> clone() const override
+    {
+        return std::make_unique<MemberAssignmentNode>(
+            object ? object->clone() : nullptr, member,
+            value ? value->clone() : nullptr, line, column);
+    }
 };
 
 struct NewExpressionNode : ASTNode
@@ -615,6 +1085,14 @@ struct NewExpressionNode : ASTNode
     NewExpressionNode(std::string className, int line = 0, int column = 0)
         : ASTNode(NodeType::NEW_EXPRESSION, line, column)
         , className(std::move(className)) {}
+
+    std::unique_ptr<ASTNode> clone() const override
+    {
+        auto ne = std::make_unique<NewExpressionNode>(className, line, column);
+        for (const auto& arg : arguments)
+            ne->arguments.push_back(arg ? arg->clone() : nullptr);
+        return ne;
+    }
 };
 
 // ============================================================
@@ -627,6 +1105,14 @@ struct ArrayLiteralNode : ASTNode
 
     ArrayLiteralNode(int line = 0, int column = 0)
         : ASTNode(NodeType::ARRAY_LITERAL, line, column) {}
+
+    std::unique_ptr<ASTNode> clone() const override
+    {
+        auto al = std::make_unique<ArrayLiteralNode>(line, column);
+        for (const auto& elem : elements)
+            al->elements.push_back(elem ? elem->clone() : nullptr);
+        return al;
+    }
 };
 
 struct ArrayAccessNode : ASTNode
@@ -639,6 +1125,13 @@ struct ArrayAccessNode : ASTNode
         : ASTNode(NodeType::ARRAY_ACCESS, line, column)
         , array(std::move(array))
         , index(std::move(index)) {}
+
+    std::unique_ptr<ASTNode> clone() const override
+    {
+        return std::make_unique<ArrayAccessNode>(
+            array ? array->clone() : nullptr,
+            index ? index->clone() : nullptr, line, column);
+    }
 };
 
 struct IndexAssignmentNode : ASTNode
@@ -653,6 +1146,14 @@ struct IndexAssignmentNode : ASTNode
         , array(std::move(array))
         , index(std::move(index))
         , value(std::move(value)) {}
+
+    std::unique_ptr<ASTNode> clone() const override
+    {
+        return std::make_unique<IndexAssignmentNode>(
+            array ? array->clone() : nullptr,
+            index ? index->clone() : nullptr,
+            value ? value->clone() : nullptr, line, column);
+    }
 };
 
 // ============================================================
@@ -666,6 +1167,11 @@ struct ImportNode : ASTNode
     explicit ImportNode(std::string moduleName, int line = 0, int column = 0)
         : ASTNode(NodeType::IMPORT_STATEMENT, line, column)
         , moduleName(std::move(moduleName)) {}
+
+    std::unique_ptr<ASTNode> clone() const override
+    {
+        return std::make_unique<ImportNode>(moduleName, line, column);
+    }
 };
 
 struct FromImportNode : ASTNode
@@ -676,6 +1182,13 @@ struct FromImportNode : ASTNode
     FromImportNode(std::string moduleName, int line = 0, int column = 0)
         : ASTNode(NodeType::FROM_IMPORT, line, column)
         , moduleName(std::move(moduleName)) {}
+
+    std::unique_ptr<ASTNode> clone() const override
+    {
+        auto fi = std::make_unique<FromImportNode>(moduleName, line, column);
+        fi->names = names;
+        return fi;
+    }
 };
 
 // ============================================================
@@ -688,4 +1201,12 @@ struct ProgramNode : ASTNode
 
     ProgramNode(int line = 0, int column = 0)
         : ASTNode(NodeType::PROGRAM, line, column) {}
+
+    std::unique_ptr<ASTNode> clone() const override
+    {
+        auto pn = std::make_unique<ProgramNode>(line, column);
+        for (const auto& stmt : statements)
+            pn->statements.push_back(stmt ? stmt->clone() : nullptr);
+        return pn;
+    }
 };

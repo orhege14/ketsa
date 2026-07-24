@@ -763,11 +763,9 @@ InterpretResult VM::interpret(FunctionProto* mainFunc)
 
             case OpCode::BUILTIN_CALL:
             {
-                BuiltinIndex index = static_cast<BuiltinIndex>(instr.operand);
-                // We need arg count - for builtins, let's peek at the stack size
-                // But builtins are pushed with their args before the call
-                // We'll use a fixed arg count of 1 for now (most builtins take 1 arg)
-                callBuiltin(index, 1);
+                BuiltinIndex index = static_cast<BuiltinIndex>(instr.operand >> 16);
+                int argCount = static_cast<int>(instr.operand & 0xFFFF);
+                callBuiltin(index, argCount);
                 cf->ip++;
                 break;
             }

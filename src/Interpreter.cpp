@@ -45,6 +45,10 @@ void Interpreter::registerBuiltins()
     globals->define("toFloat", std::make_unique<BuiltinFunctionValue>("toFloat", builtinToFloat));
     globals->define("toString", std::make_unique<BuiltinFunctionValue>("toString", builtinToString));
     globals->define("range", std::make_unique<BuiltinFunctionValue>("range", builtinRange));
+    globals->define("map", std::make_unique<BuiltinFunctionValue>("map", builtinMap));
+    globals->define("filter", std::make_unique<BuiltinFunctionValue>("filter", builtinFilter));
+    globals->define("reduce", std::make_unique<BuiltinFunctionValue>("reduce", builtinReduce));
+    globals->define("foreach", std::make_unique<BuiltinFunctionValue>("foreach", builtinForEach));
 }
 
 // ============================================================
@@ -87,7 +91,9 @@ void Interpreter::executeStatement(ASTNode* node)
             TypeInfo typeInfo = decl->declaredType.value_or(
                 value ? value->getTypeInfo() : TypeInfo(TypeKind::ANY));
 
-            environment->define(decl->name, std::move(value), decl->isConst, typeInfo);
+            // let = immutable by default, const = immutable, var = mutable
+            bool effectivelyConst = decl->isConst || !decl->isMutable;
+            environment->define(decl->name, std::move(value), effectivelyConst, typeInfo);
             break;
         }
 
@@ -318,6 +324,16 @@ void Interpreter::executeStatement(ASTNode* node)
                 environment,
                 funcDecl->name.empty());
 
+            // Extract default parameter values
+            std::vector<std::unique_ptr<DefaultParamInfo>> defaults;
+            for (auto& p : funcDecl->parameters)
+            {
+                auto di = std::make_unique<DefaultParamInfo>();
+                di->defaultValue = std::move(p.defaultValue);
+                defaults.push_back(std::move(di));
+            }
+            funcValue->setDefaultParams(std::move(defaults));
+
             if (!funcDecl->name.empty())
                 environment->define(funcDecl->name, std::move(funcValue));
             break;
@@ -376,6 +392,34 @@ void Interpreter::executeStatement(ASTNode* node)
                 }
             }
             break;
+        }
+
+        case NodeType::TRY:
+        {
+            auto tryNode = static_cast<TryNode*>(node);
+            auto tryEnv = environment->createChild();
+            try {
+                executeBlock(tryNode->tryBody, tryEnv);
+            }
+            catch (ThrowSignal& ts)
+            {
+                for (auto& clause : tryNode->catchClauses)
+                {
+                    auto catchEnv = environment->createChild();
+                    if (!clause.variableName.empty())
+                        catchEnv->define(clause.variableName, ts.value ? ts.value->clone() : std::make_unique<NullValue>());
+                    executeBlock(clause.body, catchEnv);
+                    break;
+                }
+            }
+            break;
+        }
+
+        case NodeType::THROW:
+        {
+            auto throwNode = static_cast<ThrowNode*>(node);
+            auto val = evaluate(throwNode->expression.get());
+            throw ThrowSignal{std::move(val)};
         }
 
         case NodeType::MATCH:
@@ -634,6 +678,14 @@ std::unique_ptr<Value> Interpreter::evaluate(ASTNode* node)
             for (const auto& field : classObj->getFields())
                 instanceEnv->define(field, std::make_unique<NullValue>());
 
+            auto cloneBody = [](const std::vector<std::unique_ptr<ASTNode>>& src) -> std::vector<std::unique_ptr<ASTNode>> {
+                std::vector<std::unique_ptr<ASTNode>> dst;
+                for (const auto& node : src) {
+                    if (node) dst.push_back(node->clone());
+                }
+                return dst;
+            };
+
             // Find and execute constructor
             auto& methods = classObj->getMethods();
             for (auto& method : methods)
@@ -648,7 +700,7 @@ std::unique_ptr<Value> Interpreter::evaluate(ASTNode* node)
 
                     auto ctorFunc = std::make_unique<FunctionValue>(
                         method.function.name, params,
-                        std::move(method.function.body),
+                        cloneBody(method.function.body),
                         instanceEnv);
 
                     // Bind arguments
@@ -688,10 +740,9 @@ std::unique_ptr<Value> Interpreter::evaluate(ASTNode* node)
 
                     auto methodFunc = std::make_unique<FunctionValue>(
                         method.function.name, params,
-                        std::move(method.function.body),
+                        cloneBody(method.function.body),
                         instanceEnv);
 
-                    method.function.body = std::vector<std::unique_ptr<ASTNode>>();
                     obj->set(method.function.name, std::move(methodFunc));
                 }
             }
@@ -887,10 +938,15 @@ std::unique_ptr<Value> Interpreter::evaluateUnary(UnaryExpressionNode* node)
 
 std::unique_ptr<Value> Interpreter::evaluateFunctionCall(FunctionCallNode* node)
 {
-    // Evaluate arguments
+    // Evaluate positional arguments
     std::vector<std::unique_ptr<Value>> args;
     for (auto& arg : node->arguments)
         args.push_back(evaluate(arg.get()));
+
+    // Evaluate named arguments
+    std::unordered_map<std::string, std::unique_ptr<Value>> namedArgs;
+    for (auto& namedArg : node->namedArguments)
+        namedArgs[namedArg.name] = evaluate(namedArg.value.get());
 
     Value* callee = environment->get(node->functionName);
     if (!callee)
@@ -902,31 +958,44 @@ std::unique_ptr<Value> Interpreter::evaluateFunctionCall(FunctionCallNode* node)
         return std::make_unique<NullValue>();
     }
 
-    // Handle built-in functions
     if (callee->getType() == ValueType::BUILTIN_FUNCTION)
     {
         auto builtin = static_cast<BuiltinFunctionValue*>(callee);
         return builtin->getFunction()(args, environment.get());
     }
 
-    // Handle user-defined functions
     if (callee->getType() == ValueType::FUNCTION)
     {
         auto func = static_cast<FunctionValue*>(callee);
         auto closure = func->getClosure();
         auto callEnv = std::make_shared<Environment>(closure, errorHandler);
 
-        // Bind parameters
         const auto& params = func->getParameters();
+        const auto& defaults = func->getDefaultParams();
+
         for (size_t i = 0; i < params.size(); i++)
         {
-            if (i < args.size())
+            // Check named argument first
+            auto namedIt = namedArgs.find(params[i]);
+            if (namedIt != namedArgs.end())
+            {
+                callEnv->define(params[i], std::move(namedIt->second));
+            }
+            else if (i < args.size())
+            {
                 callEnv->define(params[i], std::move(args[i]));
+            }
+            else if (i < defaults.size() && defaults[i] && defaults[i]->defaultValue)
+            {
+                auto defaultValue = evaluate(defaults[i]->defaultValue.get());
+                callEnv->define(params[i], std::move(defaultValue));
+            }
             else
+            {
                 callEnv->define(params[i], std::make_unique<NullValue>());
+            }
         }
 
-        // Execute function body
         auto prevEnv = environment;
         environment = callEnv;
 
@@ -1075,6 +1144,116 @@ std::unique_ptr<Value> Interpreter::builtinRange(const std::vector<std::unique_p
     }
 
     return std::make_unique<ArrayValue>(std::move(values));
+}
+
+// ============================================================
+// FUNCTIONAL BUILTINS (map, filter, reduce, foreach)
+// ============================================================
+
+std::unique_ptr<Value> Interpreter::callFunctionWithArgs(FunctionValue* func,
+    std::vector<std::unique_ptr<Value>> callArgs, ErrorHandler* errorHandler)
+{
+    auto closure = func->getClosure();
+    auto callEnv = std::make_shared<Environment>(closure, errorHandler);
+    const auto& params = func->getParameters();
+    for (size_t i = 0; i < params.size(); i++)
+    {
+        if (i < callArgs.size())
+            callEnv->define(params[i], std::move(callArgs[i]));
+        else
+            callEnv->define(params[i], std::make_unique<NullValue>());
+    }
+
+    Interpreter temp(errorHandler);
+    temp.setGlobals(callEnv);
+    temp.setEnvironment(callEnv);
+    temp.executeProgram(func->getBody());
+    return std::make_unique<NullValue>();
+}
+
+std::unique_ptr<Value> Interpreter::builtinMap(const std::vector<std::unique_ptr<Value>>& args, Environment* env)
+{
+    (void)env;
+    if (args.size() < 2 || !args[0] || !args[1]) return std::make_unique<NullValue>();
+    if (args[0]->getType() != ValueType::ARRAY || args[1]->getType() != ValueType::FUNCTION)
+        return std::make_unique<NullValue>();
+    auto arr = static_cast<ArrayValue*>(args[0].get());
+    auto func = static_cast<FunctionValue*>(args[1].get());
+
+    std::vector<std::unique_ptr<Value>> result;
+    for (size_t i = 0; i < arr->size(); i++)
+    {
+        std::vector<std::unique_ptr<Value>> callArgs;
+        callArgs.push_back(arr->get(i)->clone());
+        auto val = callFunctionWithArgs(func, std::move(callArgs), nullptr);
+        result.push_back(std::move(val));
+    }
+    return std::make_unique<ArrayValue>(std::move(result));
+}
+
+std::unique_ptr<Value> Interpreter::builtinFilter(const std::vector<std::unique_ptr<Value>>& args, Environment* env)
+{
+    (void)env;
+    if (args.size() < 2 || !args[0] || !args[1]) return std::make_unique<NullValue>();
+    if (args[0]->getType() != ValueType::ARRAY || args[1]->getType() != ValueType::FUNCTION)
+        return std::make_unique<NullValue>();
+    auto arr = static_cast<ArrayValue*>(args[0].get());
+    auto func = static_cast<FunctionValue*>(args[1].get());
+
+    std::vector<std::unique_ptr<Value>> result;
+    for (size_t i = 0; i < arr->size(); i++)
+    {
+        std::vector<std::unique_ptr<Value>> callArgs;
+        callArgs.push_back(arr->get(i)->clone());
+        auto pred = callFunctionWithArgs(func, std::move(callArgs), nullptr);
+        if (pred && pred->isTruthy())
+            result.push_back(arr->get(i)->clone());
+    }
+    return std::make_unique<ArrayValue>(std::move(result));
+}
+
+std::unique_ptr<Value> Interpreter::builtinReduce(const std::vector<std::unique_ptr<Value>>& args, Environment* env)
+{
+    (void)env;
+    if (args.size() < 2 || !args[0] || !args[1]) return std::make_unique<NullValue>();
+    if (args[0]->getType() != ValueType::ARRAY || args[1]->getType() != ValueType::FUNCTION)
+        return std::make_unique<NullValue>();
+    auto arr = static_cast<ArrayValue*>(args[0].get());
+    auto func = static_cast<FunctionValue*>(args[1].get());
+
+    std::unique_ptr<Value> acc;
+    if (args.size() >= 3 && args[2])
+        acc = args[2]->clone();
+    else if (arr->size() > 0)
+        acc = arr->get(0)->clone();
+
+    size_t startIdx = (args.size() >= 3 || !acc) ? 0 : 1;
+    for (size_t i = startIdx; i < arr->size(); i++)
+    {
+        std::vector<std::unique_ptr<Value>> callArgs;
+        callArgs.push_back(acc ? acc->clone() : std::make_unique<NullValue>());
+        callArgs.push_back(arr->get(i)->clone());
+        acc = callFunctionWithArgs(func, std::move(callArgs), nullptr);
+    }
+    return acc ? std::move(acc) : std::make_unique<NullValue>();
+}
+
+std::unique_ptr<Value> Interpreter::builtinForEach(const std::vector<std::unique_ptr<Value>>& args, Environment* env)
+{
+    (void)env;
+    if (args.size() < 2 || !args[0] || !args[1]) return std::make_unique<NullValue>();
+    if (args[0]->getType() != ValueType::ARRAY || args[1]->getType() != ValueType::FUNCTION)
+        return std::make_unique<NullValue>();
+    auto arr = static_cast<ArrayValue*>(args[0].get());
+    auto func = static_cast<FunctionValue*>(args[1].get());
+
+    for (size_t i = 0; i < arr->size(); i++)
+    {
+        std::vector<std::unique_ptr<Value>> callArgs;
+        callArgs.push_back(arr->get(i)->clone());
+        callFunctionWithArgs(func, std::move(callArgs), nullptr);
+    }
+    return std::make_unique<NullValue>();
 }
 
 // ============================================================

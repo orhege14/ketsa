@@ -5,15 +5,20 @@
 #include <memory>
 #include <vector>
 #include <string>
-#include <shared_mutex>
 
 class Environment;
+
+struct DefaultParamInfo
+{
+    std::unique_ptr<ASTNode> defaultValue;
+};
 
 class FunctionValue : public Value
 {
     std::string name;
     std::vector<std::string> parameters;
     std::vector<std::unique_ptr<ASTNode>> body;
+    std::vector<std::unique_ptr<DefaultParamInfo>> defaultValues;
     std::shared_ptr<Environment> closure;
     bool isAnonymous;
 public:
@@ -21,6 +26,7 @@ public:
                   std::vector<std::unique_ptr<ASTNode>> body,
                   std::shared_ptr<Environment> closure,
                   bool isAnonymous = false);
+    ~FunctionValue() override = default;
     ValueType getType() const override;
     std::string toString() const override;
     std::unique_ptr<Value> clone() const override;
@@ -31,4 +37,6 @@ public:
     std::vector<std::unique_ptr<ASTNode>>& getBody();
     std::shared_ptr<Environment> getClosure() const;
     bool isAnonymousFunc() const;
+    void setDefaultParams(std::vector<std::unique_ptr<DefaultParamInfo>> defaults);
+    const std::vector<std::unique_ptr<DefaultParamInfo>>& getDefaultParams() const;
 };

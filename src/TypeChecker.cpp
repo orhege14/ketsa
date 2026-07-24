@@ -218,7 +218,6 @@ TypeInfo TypeChecker::inferType(ASTNode* node)
 
         case NodeType::OBJECT_LITERAL:
         {
-            auto objLit = static_cast<ObjectLiteralNode*>(node);
             TypeInfo t(TypeKind::OBJECT);
             t.name = "object";
             return t;
@@ -248,18 +247,70 @@ TypeInfo TypeChecker::inferType(ASTNode* node)
             return t;
         }
 
+        case NodeType::LAMBDA:
+        {
+            auto lambda = static_cast<LambdaNode*>(node);
+            std::vector<TypeInfo> paramTypes;
+            for (const auto& p : lambda->parameters)
+                paramTypes.push_back(p.type);
+            TypeInfo retType = lambda->returnType;
+            if (retType.kind == TypeKind::ANY)
+                retType = TypeInfo(TypeKind::ANY);
+            return TypeInfo::createFunction(paramTypes, std::make_unique<TypeInfo>(retType));
+        }
+
         default:
             return TypeInfo(TypeKind::ANY);
     }
 }
 
+TypeInfo TypeChecker::resolveAlias(const TypeInfo& type)
+{
+    if (type.kind == TypeKind::OBJECT && type.name.has_value())
+    {
+        for (Scope* s = currentScope; s; s = s->parent)
+        {
+            auto it = s->typeAliases.find(type.name.value());
+            if (it != s->typeAliases.end())
+                return it->second;
+        }
+    }
+    return type;
+}
+
 bool TypeChecker::isAssignable(TypeInfo target, TypeInfo source)
 {
+    target = resolveAlias(target);
+    source = resolveAlias(source);
+
     if (target.kind == TypeKind::ANY || source.kind == TypeKind::ANY)
         return true;
 
-    if (target.kind == TypeKind::NULL_TYPE || source.kind == TypeKind::NULL_TYPE)
-        return target.kind == TypeKind::NULL_TYPE || target.kind == TypeKind::OBJECT || target.kind == TypeKind::ANY;
+    if (target.kind == TypeKind::TYPE_PARAM)
+        return true;
+
+    if (target.kind == TypeKind::OPTIONAL)
+    {
+        if (source.kind == TypeKind::NULL_TYPE)
+            return true;
+        if (target.optionalType)
+            return isAssignable(*target.optionalType, source);
+        return true;
+    }
+
+    if (source.kind == TypeKind::NULL_TYPE)
+        return target.kind == TypeKind::NULL_TYPE || target.kind == TypeKind::OBJECT ||
+               target.kind == TypeKind::ANY || target.kind == TypeKind::OPTIONAL;
+
+    if (target.kind == TypeKind::UNION)
+    {
+        for (const auto& ut : target.unionTypes)
+        {
+            if (isAssignable(ut, source))
+                return true;
+        }
+        return false;
+    }
 
     if (target.kind == source.kind)
     {
@@ -291,11 +342,30 @@ bool TypeChecker::isAssignable(TypeInfo target, TypeInfo source)
 
 TypeInfo TypeChecker::resolveTypeParam(const TypeInfo& type)
 {
-    if (type.kind == TypeKind::ANY && type.name.has_value())
+    if (type.kind == TypeKind::TYPE_PARAM && type.name.has_value())
     {
         auto it = currentTypeBindings.find(type.name.value());
         if (it != currentTypeBindings.end())
             return it->second;
+    }
+    if (type.kind == TypeKind::ARRAY && type.elementType)
+    {
+        TypeInfo resolved = resolveTypeParam(*type.elementType);
+        return TypeInfo::createArray(std::make_unique<TypeInfo>(resolved));
+    }
+    if (type.kind == TypeKind::OPTIONAL && type.optionalType)
+    {
+        TypeInfo resolved = resolveTypeParam(*type.optionalType);
+        return TypeInfo::createOptional(std::make_unique<TypeInfo>(resolved));
+    }
+    if (type.kind == TypeKind::FUNCTION)
+    {
+        std::vector<TypeInfo> resolvedParams;
+        for (const auto& p : type.paramTypes)
+            resolvedParams.push_back(resolveTypeParam(p));
+        TypeInfo resolvedRet = type.returnType ?
+            resolveTypeParam(*type.returnType) : TypeInfo(TypeKind::VOID);
+        return TypeInfo::createFunction(resolvedParams, std::make_unique<TypeInfo>(resolvedRet));
     }
     return type;
 }
@@ -434,25 +504,61 @@ TypeInfo TypeChecker::checkExpression(ASTNode* node)
                 return sym->type.returnType ? *sym->type.returnType : TypeInfo(TypeKind::ANY);
             }
 
-            if (call->arguments.size() != sig->paramTypes.size() && !sig->isGeneric)
+            // Handle named arguments
+            std::vector<TypeInfo> resolvedParamTypes = sig->paramTypes;
+            if (!call->namedArguments.empty())
+            {
+                for (const auto& namedArg : call->namedArguments)
+                {
+                    for (size_t i = 0; i < sig->paramNames.size(); i++)
+                    {
+                        if (sig->paramNames[i] == namedArg.name)
+                        {
+                            resolvedParamTypes[i] = checkExpression(namedArg.value.get());
+                            break;
+                        }
+                    }
+                }
+            }
+
+            size_t totalArgs = call->arguments.size() + call->namedArguments.size();
+            if (totalArgs != sig->paramTypes.size() && !sig->isGeneric)
             {
                 if (errorHandler)
                     errorHandler->error(ErrorCode::WRONG_ARGUMENT_COUNT,
                         "Function '" + call->functionName + "' expects " +
                         std::to_string(sig->paramTypes.size()) + " arguments but " +
-                        std::to_string(call->arguments.size()) + " provided",
+                        std::to_string(totalArgs) + " provided",
                         SourceLocation("", node->line, node->column));
                 return sig->returnType;
             }
 
+            // Check argument count
+            if (sig->paramTypes.size() > 0 && totalArgs > sig->paramTypes.size())
+            {
+                if (errorHandler)
+                    errorHandler->error(ErrorCode::WRONG_ARGUMENT_COUNT,
+                        "Too many arguments for function '" + call->functionName + "'",
+                        SourceLocation("", node->line, node->column));
+                return sig->returnType;
+            }
+
+            // Type check arguments with generic binding
             for (size_t i = 0; i < call->arguments.size() && i < sig->paramTypes.size(); i++)
             {
                 TypeInfo argType = checkExpression(call->arguments[i].get());
                 TypeInfo paramType = sig->paramTypes[i];
 
-                if (paramType.kind == TypeKind::ANY && !sig->typeParams.empty())
+                if (sig->isGeneric)
                 {
-                    currentTypeBindings[sig->typeParams[0]] = argType;
+                    if (paramType.kind == TypeKind::TYPE_PARAM || paramType.kind == TypeKind::ANY)
+                    {
+                        for (const auto& tp : sig->typeParams)
+                        {
+                            currentTypeBindings[tp] = argType;
+                        }
+                        paramType = argType;
+                    }
                 }
 
                 if (paramType.kind != TypeKind::ANY && !isAssignable(paramType, argType))
@@ -467,7 +573,10 @@ TypeInfo TypeChecker::checkExpression(ASTNode* node)
                 }
             }
 
-            return sig->returnType;
+            TypeInfo callResultType = sig->returnType;
+            if (sig->isGeneric)
+                callResultType = resolveTypeParam(callResultType);
+            return callResultType;
         }
 
         case NodeType::MEMBER_ACCESS:
@@ -548,7 +657,7 @@ void TypeChecker::checkStatement(ASTNode* node)
                 }
             }
 
-            declareSymbol(decl->name, SymbolInfo(SymbolInfo::Kind::VARIABLE, declType, decl->isConst));
+            declareSymbol(decl->name, SymbolInfo(SymbolInfo::Kind::VARIABLE, declType, decl->isConst || !decl->isMutable));
             break;
         }
 
@@ -745,6 +854,39 @@ void TypeChecker::checkStatement(ASTNode* node)
         case NodeType::FROM_IMPORT:
             break;
 
+        case NodeType::MATCH:
+        {
+            auto matchNode = static_cast<MatchNode*>(node);
+            checkExpression(matchNode->expression.get());
+            for (auto& caseNode : matchNode->cases)
+            {
+                pushScope();
+                checkBlock(caseNode.body);
+                popScope();
+            }
+            if (!matchNode->elseBody.empty())
+            {
+                pushScope();
+                checkBlock(matchNode->elseBody);
+                popScope();
+            }
+            break;
+        }
+
+        case NodeType::TYPE_ALIAS:
+        {
+            auto alias = static_cast<TypeAliasNode*>(node);
+            currentScope->typeAliases[alias->aliasName] = alias->underlyingType;
+            break;
+        }
+
+        case NodeType::LAMBDA:
+        {
+            auto lambda = static_cast<LambdaNode*>(node);
+            checkLambda(lambda);
+            break;
+        }
+
         default:
             checkExpression(node);
             break;
@@ -760,9 +902,123 @@ void TypeChecker::checkBlock(const std::vector<std::unique_ptr<ASTNode>>& statem
     }
 }
 
+void TypeChecker::checkClassDeclaration(ClassDeclarationNode* node)
+{
+    ClassInfo classInfo;
+    classInfo.name = node->name;
+    classInfo.baseClass = node->baseClass;
+
+    for (const auto& field : node->fields)
+    {
+        classInfo.fields.push_back(field);
+        classInfo.fieldTypes[field] = TypeInfo(TypeKind::ANY);
+    }
+
+    for (auto& method : node->methods)
+    {
+        FunctionSignature sig;
+        sig.name = method.function.name;
+        for (const auto& p : method.function.parameters)
+        {
+            sig.paramTypes.push_back(p.type);
+            sig.paramNames.push_back(p.name);
+        }
+        sig.returnType = method.function.returnType;
+        sig.isGeneric = !method.function.genericParams.empty();
+        sig.typeParams = method.function.genericParams;
+        classInfo.methods.push_back(sig);
+    }
+
+    declareClass(node->name, classInfo);
+
+    // Check interfaces
+    for (const auto& ifaceName : node->implements)
+    {
+        InterfaceInfo* iface = lookupInterface(ifaceName);
+        if (!iface)
+        {
+            if (errorHandler)
+                errorHandler->error(ErrorCode::UNDEFINED_VARIABLE,
+                    "Interface '" + ifaceName + "' not found for class '" + node->name + "'",
+                    SourceLocation("", node->line, node->column));
+            continue;
+        }
+        for (const auto& ifaceMethod : iface->methods)
+        {
+            bool found = false;
+            for (const auto& clsMethod : classInfo.methods)
+            {
+                if (clsMethod.name == ifaceMethod.name)
+                {
+                    found = true;
+                    break;
+                }
+            }
+            if (!found && errorHandler)
+                errorHandler->error(ErrorCode::TYPE_MISMATCH,
+                    "Class '" + node->name + "' does not implement interface method '" +
+                    ifaceMethod.name + "' from interface '" + ifaceName + "'",
+                    SourceLocation("", node->line, node->column));
+        }
+    }
+}
+
+void TypeChecker::checkLambda(LambdaNode* node)
+{
+    pushScope();
+
+    for (const auto& p : node->parameters)
+    {
+        declareSymbol(p.name, SymbolInfo(SymbolInfo::Kind::VARIABLE, p.type));
+    }
+
+    TypeInfo retType = node->returnType;
+    if (retType.kind == TypeKind::ANY)
+        retType = TypeInfo(TypeKind::ANY);
+
+    returnContext.push(retType);
+    hasReturnPath = false;
+
+    for (const auto& stmt : node->body)
+    {
+        if (stmt)
+            checkStatement(stmt.get());
+    }
+
+    returnContext.pop();
+    popScope();
+}
+
+void TypeChecker::instantiateGenericFunction(FunctionSignature* sig, const std::vector<TypeInfo>& argTypes, TypeInfo& returnType)
+{
+    currentTypeBindings.clear();
+    for (size_t i = 0; i < sig->typeParams.size() && i < argTypes.size(); i++)
+    {
+        currentTypeBindings[sig->typeParams[i]] = argTypes[i];
+    }
+    returnType = resolveTypeParam(sig->returnType);
+    if (returnType.kind == TypeKind::TYPE_PARAM)
+        returnType = TypeInfo(TypeKind::ANY);
+}
+
+TypeInfo TypeChecker::getErrorLocation(ASTNode* node)
+{
+    SourceLocation loc("", node->line, node->column);
+    return TypeInfo(TypeKind::ANY);
+}
+
 void TypeChecker::checkFunctionDeclaration(FunctionDeclarationNode* node)
 {
     pushScope();
+
+    bool isGeneric = !node->genericParams.empty();
+    if (isGeneric)
+    {
+        for (const auto& tp : node->genericParams)
+        {
+            declareSymbol(tp, SymbolInfo(SymbolInfo::Kind::TYPE_PARAM, TypeInfo::createTypeParam(tp)));
+        }
+    }
 
     std::vector<TypeInfo> paramTypes;
     std::vector<std::string> paramNames;
@@ -781,6 +1037,8 @@ void TypeChecker::checkFunctionDeclaration(FunctionDeclarationNode* node)
     sig.paramTypes = paramTypes;
     sig.returnType = retType;
     sig.paramNames = paramNames;
+    sig.isGeneric = isGeneric;
+    sig.typeParams = node->genericParams;
 
     if (!node->name.empty())
     {
@@ -812,34 +1070,6 @@ void TypeChecker::checkFunctionDeclaration(FunctionDeclarationNode* node)
     popScope();
 }
 
-void TypeChecker::checkClassDeclaration(ClassDeclarationNode* node)
-{
-    ClassInfo classInfo;
-    classInfo.name = node->name;
-    classInfo.baseClass = node->baseClass;
-
-    for (const auto& field : node->fields)
-    {
-        classInfo.fields.push_back(field);
-        classInfo.fieldTypes[field] = TypeInfo(TypeKind::ANY);
-    }
-
-    for (auto& method : node->methods)
-    {
-        FunctionSignature sig;
-        sig.name = method.function.name;
-        for (const auto& p : method.function.parameters)
-        {
-            sig.paramTypes.push_back(p.type);
-            sig.paramNames.push_back(p.name);
-        }
-        sig.returnType = method.function.returnType;
-        classInfo.methods.push_back(sig);
-    }
-
-    declareClass(node->name, classInfo);
-}
-
 bool TypeChecker::check(const std::vector<std::unique_ptr<ASTNode>>& ast)
 {
     if (errorHandler)
@@ -847,35 +1077,53 @@ bool TypeChecker::check(const std::vector<std::unique_ptr<ASTNode>>& ast)
         errorHandler->clear();
     }
 
-    // First pass: collect all function declarations for forward references
+    // First pass: collect declarations for forward references
     for (const auto& node : ast)
     {
-        if (node && node->type == NodeType::FUNCTION_DECLARATION)
+        if (!node) continue;
+
+        switch (node->type)
         {
-            auto funcDecl = static_cast<FunctionDeclarationNode*>(node.get());
-            std::vector<TypeInfo> paramTypes;
-            std::vector<std::string> paramNames;
-            for (const auto& p : funcDecl->parameters)
+            case NodeType::FUNCTION_DECLARATION:
             {
-                paramTypes.push_back(p.type);
-                paramNames.push_back(p.name);
+                auto funcDecl = static_cast<FunctionDeclarationNode*>(node.get());
+                std::vector<TypeInfo> paramTypes;
+                std::vector<std::string> paramNames;
+                for (const auto& p : funcDecl->parameters)
+                {
+                    paramTypes.push_back(p.type);
+                    paramNames.push_back(p.name);
+                }
+
+                FunctionSignature sig;
+                sig.name = funcDecl->name;
+                sig.paramTypes = paramTypes;
+                sig.returnType = funcDecl->returnType.kind == TypeKind::ANY ?
+                    TypeInfo(TypeKind::VOID) : funcDecl->returnType;
+                sig.paramNames = paramNames;
+                sig.isGeneric = !funcDecl->genericParams.empty();
+                sig.typeParams = funcDecl->genericParams;
+
+                if (!funcDecl->name.empty())
+                {
+                    SymbolInfo funcInfo(SymbolInfo::Kind::FUNCTION, TypeInfo(TypeKind::FUNCTION));
+                    funcInfo.type = TypeInfo::createFunction(paramTypes,
+                        std::make_unique<TypeInfo>(sig.returnType));
+                    currentScope->symbols[funcDecl->name] = funcInfo;
+                    currentScope->functions[funcDecl->name] = sig;
+                }
+                break;
             }
 
-            FunctionSignature sig;
-            sig.name = funcDecl->name;
-            sig.paramTypes = paramTypes;
-            sig.returnType = funcDecl->returnType.kind == TypeKind::ANY ?
-                TypeInfo(TypeKind::VOID) : funcDecl->returnType;
-            sig.paramNames = paramNames;
-
-            if (!funcDecl->name.empty())
+            case NodeType::TYPE_ALIAS:
             {
-                SymbolInfo funcInfo(SymbolInfo::Kind::FUNCTION, TypeInfo(TypeKind::FUNCTION));
-                funcInfo.type = TypeInfo::createFunction(paramTypes,
-                    std::make_unique<TypeInfo>(sig.returnType));
-                currentScope->symbols[funcDecl->name] = funcInfo;
-                currentScope->functions[funcDecl->name] = sig;
+                auto alias = static_cast<TypeAliasNode*>(node.get());
+                currentScope->typeAliases[alias->aliasName] = alias->underlyingType;
+                break;
             }
+
+            default:
+                break;
         }
     }
 

@@ -127,7 +127,11 @@ TypeInfo Parser::parseTypeAnnotation()
 std::optional<TypeInfo> Parser::tryParseTypeAnnotation()
 {
     if (!match(TokenType::COLON)) return std::nullopt;
+    return parseType();
+}
 
+TypeInfo Parser::parseType()
+{
     TypeInfo type(TypeKind::ANY);
 
     if (match(TokenType::INT_TYPE)) type.kind = TypeKind::INT;
@@ -136,17 +140,79 @@ std::optional<TypeInfo> Parser::tryParseTypeAnnotation()
     else if (match(TokenType::BOOL_TYPE)) type.kind = TypeKind::BOOLEAN;
     else if (match(TokenType::VOID_TYPE)) type.kind = TypeKind::VOID;
     else if (match(TokenType::ANY_TYPE)) type.kind = TypeKind::ANY;
+    else if (match(TokenType::CHARACTER)) type.kind = TypeKind::CHAR;
+    else if (match(TokenType::LBRACKET))
+    {
+        auto elemType = std::make_unique<TypeInfo>(parseType());
+        consume(TokenType::RBRACKET, "Expected ']' after array element type");
+        return TypeInfo::createArray(std::move(elemType));
+    }
     else if (match(TokenType::IDENTIFIER))
     {
-        type.kind = TypeKind::OBJECT;
-        type.name = previous().value;
+        std::string typeName = previous().value;
+        TypeInfo objType = TypeInfo::createObject(typeName);
+
+        // Parse generic type arguments like Box<int> but don't store in genericParams (reserved for param names)
+        if (match(TokenType::LBRACKET))
+        {
+            parseTypeList();
+            consume(TokenType::RBRACKET, "Expected ']' after generic params");
+        }
+
+        type = objType;
     }
     else
     {
         type.kind = TypeKind::ANY;
     }
 
+    // Optional type: int?
+    if (match(TokenType::QUESTION))
+    {
+        return TypeInfo::createOptional(std::make_unique<TypeInfo>(type));
+    }
+
+    // Union type: int | string
+    if (match(TokenType::BIT_OR))
+    {
+        std::vector<TypeInfo> unionTypes;
+        unionTypes.push_back(std::move(type));
+        unionTypes.push_back(parseType());
+        while (match(TokenType::BIT_OR))
+            unionTypes.push_back(parseType());
+        return TypeInfo::createUnion(std::move(unionTypes));
+    }
+
     return type;
+}
+
+std::vector<TypeInfo> Parser::parseTypeList()
+{
+    std::vector<TypeInfo> types;
+    if (!check(TokenType::RBRACKET))
+    {
+        types.push_back(parseType());
+        while (match(TokenType::COMMA))
+            types.push_back(parseType());
+    }
+    return types;
+}
+
+std::vector<std::string> Parser::parseGenericParams()
+{
+    std::vector<std::string> params;
+    if (match(TokenType::LBRACKET))
+    {
+        Token name = consume(TokenType::IDENTIFIER, "Expected type parameter name");
+        params.push_back(name.value);
+        while (match(TokenType::COMMA))
+        {
+            Token pname = consume(TokenType::IDENTIFIER, "Expected type parameter name");
+            params.push_back(pname.value);
+        }
+        consume(TokenType::RBRACKET, "Expected ']' after generic parameters");
+    }
+    return params;
 }
 
 // ============================================================
@@ -169,8 +235,10 @@ std::vector<std::unique_ptr<ASTNode>> Parser::parse()
 
 std::unique_ptr<ASTNode> Parser::parseStatement()
 {
-    if (match(TokenType::LET)) return parseVariableDeclaration(false);
-    if (match(TokenType::CONST)) return parseVariableDeclaration(true);
+    if (match(TokenType::LET)) return parseVariableDeclaration(false, false);
+    if (match(TokenType::VAR)) return parseVariableDeclaration(false, true);
+    if (match(TokenType::CONST)) return parseVariableDeclaration(true, false);
+    if (match(TokenType::TYPE_KW)) return parseTypeAlias();
     if (match(TokenType::FUNC)) return parseFunctionDeclaration();
     if (match(TokenType::CLASS)) return parseClassDeclaration();
     if (match(TokenType::IF)) return parseIf();
@@ -178,6 +246,8 @@ std::unique_ptr<ASTNode> Parser::parseStatement()
     if (match(TokenType::FOR)) return parseFor();
     if (match(TokenType::SWITCH)) return parseSwitch();
     if (match(TokenType::RETURN)) return parseReturn();
+    if (match(TokenType::TRY)) return parseTry();
+    if (match(TokenType::THROW)) return parseThrow();
     if (match(TokenType::BREAK)) return parseBreak();
     if (match(TokenType::CONTINUE)) return parseContinue();
     if (match(TokenType::PRINT)) return parsePrint();
@@ -196,9 +266,8 @@ std::unique_ptr<ASTNode> Parser::parseExpressionStatement()
     return std::make_unique<ExpressionStatementNode>(std::move(expr));
 }
 
-std::unique_ptr<ASTNode> Parser::parseVariableDeclaration(bool isConst)
+std::unique_ptr<ASTNode> Parser::parseVariableDeclaration(bool isConst, bool isMutable)
 {
-    // Accept IDENTIFIER or common keywords as variable names
     Token nameToken(TokenType::IDENTIFIER, "");
     if (check(TokenType::IDENTIFIER)) {
         nameToken = advance();
@@ -227,7 +296,7 @@ std::unique_ptr<ASTNode> Parser::parseVariableDeclaration(bool isConst)
 
     return std::make_unique<VariableDeclarationNode>(
         name, std::move(initializer),
-        std::move(typeAnnotation), isConst, line, col);
+        std::move(typeAnnotation), isConst, isMutable, line, col);
 }
 
 std::unique_ptr<ASTNode> Parser::parseBlock()
@@ -433,7 +502,8 @@ std::unique_ptr<ASTNode> Parser::parseFunctionDeclaration()
 
     auto func = std::make_unique<FunctionDeclarationNode>("", line, col);
 
-    // Anonymous function
+    func->genericParams = parseGenericParams();
+
     if (check(TokenType::LPAREN))
     {
         func->parameters = parseParameters();
@@ -441,9 +511,10 @@ std::unique_ptr<ASTNode> Parser::parseFunctionDeclaration()
         return func;
     }
 
-    // Named function
     Token nameToken = consume(TokenType::IDENTIFIER, "Expected function name");
     func->name = nameToken.value;
+
+    func->genericParams = parseGenericParams();
 
     consume(TokenType::LPAREN, "Expected '(' after function name");
     if (!check(TokenType::RPAREN))
@@ -452,28 +523,14 @@ std::unique_ptr<ASTNode> Parser::parseFunctionDeclaration()
             Token paramName = consume(TokenType::IDENTIFIER, "Expected parameter name");
             TypeInfo paramType(TypeKind::ANY);
             if (match(TokenType::COLON))
-            {
-                if (match(TokenType::INT_TYPE)) paramType = TypeInfo(TypeKind::INT);
-                else if (match(TokenType::FLOAT_TYPE)) paramType = TypeInfo(TypeKind::FLOAT);
-                else if (match(TokenType::STRING_TYPE)) paramType = TypeInfo(TypeKind::STRING);
-                else if (match(TokenType::BOOL_TYPE)) paramType = TypeInfo(TypeKind::BOOLEAN);
-                else if (match(TokenType::ANY_TYPE)) paramType = TypeInfo(TypeKind::ANY);
-                else paramType = TypeInfo(TypeKind::ANY);
-            }
+                paramType = parseType();
             func->parameters.emplace_back(paramName.value, paramType);
         } while (match(TokenType::COMMA));
     }
     consume(TokenType::RPAREN, "Expected ')' after parameters");
 
     if (match(TokenType::COLON))
-    {
-        if (match(TokenType::INT_TYPE)) func->returnType = TypeInfo(TypeKind::INT);
-        else if (match(TokenType::FLOAT_TYPE)) func->returnType = TypeInfo(TypeKind::FLOAT);
-        else if (match(TokenType::STRING_TYPE)) func->returnType = TypeInfo(TypeKind::STRING);
-        else if (match(TokenType::BOOL_TYPE)) func->returnType = TypeInfo(TypeKind::BOOLEAN);
-        else if (match(TokenType::VOID_TYPE)) func->returnType = TypeInfo(TypeKind::VOID);
-        else func->returnType = TypeInfo(TypeKind::ANY);
-    }
+        func->returnType = parseType();
 
     func->body = parseFunctionBody();
     return func;
@@ -489,14 +546,11 @@ std::vector<ParameterNode> Parser::parseParameters()
             Token name = consume(TokenType::IDENTIFIER, "Expected parameter name");
             TypeInfo type(TypeKind::ANY);
             if (match(TokenType::COLON))
-            {
-                if (match(TokenType::INT_TYPE)) type = TypeInfo(TypeKind::INT);
-                else if (match(TokenType::FLOAT_TYPE)) type = TypeInfo(TypeKind::FLOAT);
-                else if (match(TokenType::STRING_TYPE)) type = TypeInfo(TypeKind::STRING);
-                else if (match(TokenType::BOOL_TYPE)) type = TypeInfo(TypeKind::BOOLEAN);
-                else type = TypeInfo(TypeKind::ANY);
-            }
-            params.emplace_back(name.value, type);
+                type = parseType();
+            ParameterNode param(name.value, type);
+            if (match(TokenType::EQUAL))
+                param.defaultValue = parseExpression();
+            params.push_back(std::move(param));
         } while (match(TokenType::COMMA));
     }
     consume(TokenType::RPAREN, "Expected ')' after parameters");
@@ -528,10 +582,23 @@ std::unique_ptr<ASTNode> Parser::parseClassDeclaration()
     Token nameToken = consume(TokenType::IDENTIFIER, "Expected class name");
     auto classNode = std::make_unique<ClassDeclarationNode>(nameToken.value, line, col);
 
+    classNode->genericParams = parseGenericParams();
+
     if (match(TokenType::EXTENDS))
     {
         Token baseToken = consume(TokenType::IDENTIFIER, "Expected base class name");
         classNode->baseClass = baseToken.value;
+    }
+
+    if (match(TokenType::IMPLEMENTS))
+    {
+        Token iface = consume(TokenType::IDENTIFIER, "Expected interface name");
+        classNode->implements.push_back(iface.value);
+        while (match(TokenType::COMMA))
+        {
+            Token more = consume(TokenType::IDENTIFIER, "Expected interface name");
+            classNode->implements.push_back(more.value);
+        }
     }
 
     consume(TokenType::LBRACE, "Expected '{' for class body");
@@ -541,19 +608,29 @@ std::unique_ptr<ASTNode> Parser::parseClassDeclaration()
         if (check(TokenType::FUNC))
         {
             advance();
-            // Method
             Token methodName = consume(TokenType::IDENTIFIER, "Expected method name");
             auto methodFunc = std::make_unique<FunctionDeclarationNode>(methodName.value);
+
+            methodFunc->genericParams = parseGenericParams();
 
             consume(TokenType::LPAREN, "Expected '(' after method name");
             if (!check(TokenType::RPAREN))
             {
                 do {
                     Token paramName = consume(TokenType::IDENTIFIER, "Expected parameter name");
-                    methodFunc->parameters.emplace_back(paramName.value);
+                    TypeInfo paramType(TypeKind::ANY);
+                    if (match(TokenType::COLON))
+                        paramType = parseType();
+                    ParameterNode pn(paramName.value, paramType);
+                    if (match(TokenType::EQUAL))
+                        pn.defaultValue = parseExpression();
+                    methodFunc->parameters.push_back(std::move(pn));
                 } while (match(TokenType::COMMA));
             }
             consume(TokenType::RPAREN, "Expected ')' after parameters");
+
+            if (match(TokenType::COLON))
+                methodFunc->returnType = parseType();
 
             methodFunc->body = parseFunctionBody();
             MethodDeclaration method;
@@ -562,7 +639,6 @@ std::unique_ptr<ASTNode> Parser::parseClassDeclaration()
         }
         else
         {
-            // Field
             Token fieldToken = consume(TokenType::IDENTIFIER, "Expected field name");
             classNode->fields.push_back(fieldToken.value);
             match(TokenType::SEMICOLON);
@@ -983,13 +1059,26 @@ std::unique_ptr<ASTNode> Parser::finishCall(std::unique_ptr<ASTNode> callee)
     std::string funcName;
     if (auto varAccess = dynamic_cast<VariableAccessNode*>(callee.get()))
         funcName = varAccess->name;
+    else if (auto memberAccess = dynamic_cast<MemberAccessNode*>(callee.get()))
+        funcName = memberAccess->member;
 
     auto call = std::make_unique<FunctionCallNode>(funcName, line, col);
 
     if (!check(TokenType::RPAREN))
     {
         do {
-            call->arguments.push_back(parseExpression());
+            // Check for named argument: name:value
+            if (check(TokenType::IDENTIFIER) && tokens.size() > position + 1 &&
+                tokens[position + 1].type == TokenType::COLON)
+            {
+                Token argName = advance();
+                advance();
+                call->namedArguments.emplace_back(argName.value, parseExpression(), line, col);
+            }
+            else
+            {
+                call->arguments.push_back(parseExpression());
+            }
         } while (match(TokenType::COMMA));
     }
 
@@ -1150,6 +1239,48 @@ std::unique_ptr<ASTNode> Parser::parsePrimary()
 
     if (match(TokenType::LPAREN))
     {
+        // Lambda detection: look ahead for (params) =>
+        if (!isAtEnd() && !check(TokenType::RPAREN))
+        {
+            // Save position
+            bool couldBeLambda = false;
+            size_t savePos = position;
+
+            // Check if we have identifier(s) with optional COLON type
+            if (tokens[savePos].type == TokenType::IDENTIFIER)
+            {
+                savePos++;
+                couldBeLambda = true;
+                while (savePos < tokens.size() && tokens[savePos].type == TokenType::COMMA)
+                {
+                    savePos++;
+                    if (savePos < tokens.size() && tokens[savePos].type == TokenType::IDENTIFIER)
+                        savePos++;
+                    else { couldBeLambda = false; break; }
+                }
+                if (couldBeLambda && savePos < tokens.size() && tokens[savePos].type == TokenType::RPAREN)
+                {
+                    savePos++;
+                    if (savePos < tokens.size() && tokens[savePos].type == TokenType::FAT_ARROW)
+                    {
+                        return parseLambda();
+                    }
+                }
+            }
+        }
+
+        if (check(TokenType::RPAREN))
+        {
+            // Check for empty lambda: () => expr
+            size_t savePos2 = position;
+            advance();
+            if (match(TokenType::FAT_ARROW))
+            {
+                return parseLambda();
+            }
+            position = savePos2;
+        }
+
         auto expr = parseExpression();
         consume(TokenType::RPAREN, "Expected ')' after expression");
         return expr;
@@ -1163,6 +1294,103 @@ std::unique_ptr<ASTNode> Parser::parsePrimary()
     }
 
     return nullptr;
+}
+
+std::unique_ptr<ASTNode> Parser::parseTry()
+{
+    int line = previous().line;
+    int col = previous().column;
+
+    auto tryNode = std::make_unique<TryNode>(line, col);
+
+    // Parse try body
+    consume(TokenType::LBRACE, "Expected '{' after 'try'");
+    while (!isAtEnd() && !check(TokenType::RBRACE))
+    {
+        auto stmt = parseStatement();
+        if (stmt) tryNode->tryBody.push_back(std::move(stmt));
+    }
+    consume(TokenType::RBRACE, "Expected '}' after try body");
+
+    // Parse catch clauses
+    while (match(TokenType::CATCH))
+    {
+        CatchClause clause;
+        if (match(TokenType::LPAREN))
+        {
+            Token varToken = consume(TokenType::IDENTIFIER, "Expected catch variable name");
+            clause.variableName = varToken.value;
+            if (match(TokenType::COLON))
+                clause.errorType = parseType();
+            consume(TokenType::RPAREN, "Expected ')' after catch variable");
+        }
+        consume(TokenType::LBRACE, "Expected '{' after 'catch'");
+        while (!isAtEnd() && !check(TokenType::RBRACE))
+        {
+            auto stmt = parseStatement();
+            if (stmt) clause.body.push_back(std::move(stmt));
+        }
+        consume(TokenType::RBRACE, "Expected '}' after catch body");
+        tryNode->catchClauses.push_back(std::move(clause));
+    }
+
+    return tryNode;
+}
+
+std::unique_ptr<ASTNode> Parser::parseThrow()
+{
+    int line = previous().line;
+    int col = previous().column;
+    auto value = parseExpression();
+    match(TokenType::SEMICOLON);
+    return std::make_unique<ThrowNode>(std::move(value), line, col);
+}
+
+std::unique_ptr<ASTNode> Parser::parseTypeAlias()
+{
+    int line = previous().line;
+    int col = previous().column;
+
+    Token aliasToken = consume(TokenType::IDENTIFIER, "Expected type alias name");
+    consume(TokenType::EQUAL, "Expected '=' after type alias name");
+    TypeInfo targetType = parseType();
+    match(TokenType::SEMICOLON);
+
+    return std::make_unique<TypeAliasNode>(aliasToken.value, std::move(targetType), line, col);
+}
+
+std::unique_ptr<ASTNode> Parser::parseLambda()
+{
+    int line = previous().line;
+    int col = previous().column;
+
+    auto lambda = std::make_unique<LambdaNode>(line, col);
+
+    consume(TokenType::LPAREN, "Expected '(' for lambda parameters");
+
+    if (!check(TokenType::RPAREN))
+    {
+        do {
+            Token name = consume(TokenType::IDENTIFIER, "Expected lambda parameter name");
+            TypeInfo type(TypeKind::ANY);
+            if (match(TokenType::COLON))
+                type = parseType();
+            ParameterNode pn(name.value, type);
+            if (match(TokenType::EQUAL))
+                pn.defaultValue = parseExpression();
+            lambda->parameters.push_back(std::move(pn));
+        } while (match(TokenType::COMMA));
+    }
+    consume(TokenType::RPAREN, "Expected ')' after lambda parameters");
+
+    if (match(TokenType::COLON))
+        lambda->returnType = parseType();
+
+    consume(TokenType::FAT_ARROW, "Expected '=>' for lambda body");
+    lambda->isExpressionBody = true;
+    lambda->body.push_back(std::make_unique<ExpressionStatementNode>(parseExpression()));
+
+    return lambda;
 }
 
 std::unique_ptr<ASTNode> Parser::parseArrayLiteral()

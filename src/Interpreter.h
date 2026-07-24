@@ -24,6 +24,9 @@ private:
         std::unique_ptr<Value> value;
         bool hasValue;
     };
+    struct ThrowSignal {
+        std::unique_ptr<Value> value;
+    };
     std::stack<LoopControl> loopStack;
 
     // Pattern matching
@@ -55,6 +58,14 @@ private:
     static std::unique_ptr<Value> builtinToFloat(const std::vector<std::unique_ptr<Value>>& args, Environment* env);
     static std::unique_ptr<Value> builtinToString(const std::vector<std::unique_ptr<Value>>& args, Environment* env);
     static std::unique_ptr<Value> builtinRange(const std::vector<std::unique_ptr<Value>>& args, Environment* env);
+    static std::unique_ptr<Value> builtinMap(const std::vector<std::unique_ptr<Value>>& args, Environment* env);
+    static std::unique_ptr<Value> builtinFilter(const std::vector<std::unique_ptr<Value>>& args, Environment* env);
+    static std::unique_ptr<Value> builtinReduce(const std::vector<std::unique_ptr<Value>>& args, Environment* env);
+    static std::unique_ptr<Value> builtinForEach(const std::vector<std::unique_ptr<Value>>& args, Environment* env);
+
+    // Public helper for callback execution
+    static std::unique_ptr<Value> callFunctionWithArgs(FunctionValue* func,
+        std::vector<std::unique_ptr<Value>> args, ErrorHandler* errorHandler);
 
     // Type conversion helpers
     Value* getValue(const std::string& name);
@@ -72,4 +83,6 @@ public:
     void executeProgram(const std::vector<std::unique_ptr<ASTNode>>& nodes);
 
     std::shared_ptr<Environment> getGlobals() const { return globals; }
+    void setEnvironment(std::shared_ptr<Environment> env) { environment = std::move(env); }
+    void setGlobals(std::shared_ptr<Environment> env) { globals = std::move(env); }
 };

@@ -170,8 +170,11 @@ public:
     bool execute(FunctionProto* proto, std::vector<Value*>& stack,
                  std::shared_ptr<Environment> closure);
 
-    // Optimize bytecode
+    // Optimization pipeline
     bool optimize(FunctionProto* proto);
+    void addPass(std::unique_ptr<OptimizationPass> pass);
+    bool runOptimizationPipeline(FunctionProto* proto);
+    void clearPasses();
 
     // Stats
     int getCompiledCount() const;

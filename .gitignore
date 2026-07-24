@@ -1,31 +1,48 @@
-# Build
+# Build files
 build/
+build_release/
+build_release2/
 *.exe
 *.obj
 *.lib
 *.pdb
 *.ilk
+*.dir/
 ketsa.exe
 
-# IDE
+# CMake generated files
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+install_manifest.txt
+
+# Visual Studio generated files
 .vs/
-.vscode/
-.idea/
+*.sln
+*.vcxproj
+*.vcxproj.filters
 *.user
 *.suo
 
-# Ketsa
+# IDE settings
+.vscode/
+.idea/
+
+# Ketsa generated files
 std/
 lib/
-
-# OS
-.DS_Store
-Thumbs.db
-
-# Project
 ketsa.toml
 
-
+# Node.js
 node_modules/
 out/
 *.vsix
+
+# Build output
+x64/
+Release/
+Debug/
+
+# OS generated files
+.DS_Store
+Thumbs.db

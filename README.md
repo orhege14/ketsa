@@ -4,6 +4,8 @@
 
 Ketsa is a modern general-purpose programming language designed to combine elegant syntax, high performance, strong typing, and modern tooling.
 
+📚 **Wiki:** [`docs/wiki/`](docs/wiki/Home.md) — Full documentation, language reference, architecture guide, and examples.
+
 ```ketsa
 func fibonacci(n: int): int {
     if (n <= 1) return n

@@ -50,5 +50,3 @@ class BuiltinFunctionValue;
 class ClassValue;
 class ModuleValue;
 class Environment;
-
-using BuiltinFunctionType = std::unique_ptr<Value>(*)(const std::vector<std::unique_ptr<Value>>&, Environment*);

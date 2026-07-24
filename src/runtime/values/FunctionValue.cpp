@@ -22,7 +22,19 @@ std::string FunctionValue::toString() const
 std::unique_ptr<Value> FunctionValue::clone() const
 {
     std::vector<std::unique_ptr<ASTNode>> bodyCopy;
-    return std::make_unique<FunctionValue>(name, parameters, std::move(bodyCopy), closure, isAnonymous);
+    for (const auto& stmt : body)
+        bodyCopy.push_back(stmt ? stmt->clone() : nullptr);
+    auto cloned = std::make_unique<FunctionValue>(name, parameters, std::move(bodyCopy), closure, isAnonymous);
+    std::vector<std::unique_ptr<DefaultParamInfo>> defaultsCopy;
+    for (const auto& d : defaultValues)
+    {
+        auto di = std::make_unique<DefaultParamInfo>();
+        if (d && d->defaultValue)
+            di->defaultValue = d->defaultValue->clone();
+        defaultsCopy.push_back(std::move(di));
+    }
+    cloned->setDefaultParams(std::move(defaultsCopy));
+    return cloned;
 }
 
 TypeInfo FunctionValue::getTypeInfo() const
@@ -35,3 +47,5 @@ const std::vector<std::string>& FunctionValue::getParameters() const { return pa
 std::vector<std::unique_ptr<ASTNode>>& FunctionValue::getBody() { return body; }
 std::shared_ptr<Environment> FunctionValue::getClosure() const { return closure; }
 bool FunctionValue::isAnonymousFunc() const { return isAnonymous; }
+void FunctionValue::setDefaultParams(std::vector<std::unique_ptr<DefaultParamInfo>> defaults) { defaultValues = std::move(defaults); }
+const std::vector<std::unique_ptr<DefaultParamInfo>>& FunctionValue::getDefaultParams() const { return defaultValues; }

@@ -14,6 +14,7 @@ enum class TokenType
     // Keywords
     PRINT,
     LET,
+    VAR,
     CONST,
 
     IF,
@@ -50,6 +51,9 @@ enum class TokenType
     DEFAULT,
 
     MATCH,
+
+    TYPE_KW,
+    WHERE_KW,
 
     // Types
     INT_TYPE,

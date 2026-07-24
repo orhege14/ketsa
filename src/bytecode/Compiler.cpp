@@ -187,7 +187,9 @@ void Compiler::pushFunction(FunctionProto* func)
         newState.locals.push_back(local);
     }
 
-    stateStack.push_back(std::move(*state));
+    if (state)
+        stateStack.push_back(std::move(*state));
+    stateStack.push_back(std::move(newState));
     state = &stateStack.back();
 }
 
@@ -263,6 +265,10 @@ void Compiler::compileExpression(ASTNode* node)
             compileFunction(static_cast<FunctionDeclarationNode*>(node));
             break;
 
+        case NodeType::LAMBDA:
+            emitByte(OpCode::LOAD_NULL);
+            break;
+
         default:
             break;
     }
@@ -336,7 +342,37 @@ void Compiler::compileVariableAccess(VariableAccessNode* node)
 
 void Compiler::compileAssignment(AssignmentNode* node)
 {
-    compileExpression(node->value.get());
+    const std::string& op = node->op;
+    bool isCompound = (op != "=");
+
+    if (isCompound)
+    {
+        // Load current value of the variable
+        int local = resolveLocal(node->name);
+        if (local >= 0)
+            emitByte(OpCode::LOAD_VAR, static_cast<uint32_t>(local));
+        else
+        {
+            uint32_t global = resolveGlobal(node->name);
+            emitByte(OpCode::LOAD_GLOBAL, global);
+        }
+
+        // Compile the right-hand side value
+        compileExpression(node->value.get());
+
+        // Apply the operation
+        std::string arithOp = op.substr(0, op.size() - 1);
+        if (arithOp == "+") emitByte(OpCode::ADD);
+        else if (arithOp == "-") emitByte(OpCode::SUB);
+        else if (arithOp == "*") emitByte(OpCode::MUL);
+        else if (arithOp == "/") emitByte(OpCode::DIV);
+        else if (arithOp == "%") emitByte(OpCode::MOD);
+        else if (arithOp == "**") emitByte(OpCode::POW);
+    }
+    else
+    {
+        compileExpression(node->value.get());
+    }
 
     int local = resolveLocal(node->name);
     if (local >= 0)
@@ -434,7 +470,8 @@ void Compiler::compileFunctionCall(FunctionCallNode* node)
 
     if (isBuiltin)
     {
-        emitByte(OpCode::BUILTIN_CALL, static_cast<uint32_t>(builtinIdx));
+        uint32_t encoded = (static_cast<uint32_t>(builtinIdx) << 16) | static_cast<uint32_t>(node->arguments.size());
+        emitByte(OpCode::BUILTIN_CALL, encoded);
     }
     else
     {
@@ -568,6 +605,30 @@ void Compiler::compileStatement(ASTNode* node)
         case NodeType::FROM_IMPORT:
             break;
 
+        case NodeType::MATCH:
+        {
+            auto matchNode = static_cast<MatchNode*>(node);
+            compileExpression(matchNode->expression.get());
+            for (auto& caseNode : matchNode->cases)
+            {
+                if (caseNode.pattern.literal)
+                    compileExpression(caseNode.pattern.literal.get());
+                compileBlock(caseNode.body);
+            }
+            if (!matchNode->elseBody.empty())
+                compileBlock(matchNode->elseBody);
+            break;
+        }
+
+        case NodeType::TYPE_ALIAS:
+            break;
+
+        case NodeType::LAMBDA:
+        {
+            emitByte(OpCode::LOAD_NULL);
+            break;
+        }
+
         default:
             compileExpression(node);
             emitByte(OpCode::POP);
@@ -648,7 +709,6 @@ void Compiler::compileWhile(WhileNode* node)
     patchJump(exitJump);
     emitByte(OpCode::POP);
 
-    int breakTarget = static_cast<int>(state->func->code.size());
     if (state->breakTargets.back() >= 0)
         patchJump(state->breakTargets.back());
 
@@ -660,26 +720,54 @@ void Compiler::compileFor(ForNode* node)
 {
     beginScope();
 
-    int localIdx = addLocal(node->variable);
-    emitByte(OpCode::LOAD_NULL);
-    emitByte(OpCode::STORE_VAR, static_cast<uint32_t>(localIdx));
+    // Reserve local for loop variable
+    int varIdx = addLocal(node->variable);
 
-    // Compile iterable
+    // Compile iterable array and keep on stack
     compileExpression(node->iterable.get());
+
+    // Reserve local for index (current position)
+    int idxLocal = addLocal("__idx__");
+    emitByte(OpCode::LOAD_CONST, addConstant("0"));
+    emitByte(OpCode::STORE_VAR, static_cast<uint32_t>(idxLocal));
 
     int loopStart = static_cast<int>(state->func->code.size());
     state->breakTargets.push_back(-1);
     state->continueTargets.push_back(loopStart);
 
-    // [array, index]
+    // Load array (duplicate it from stack)
     emitByte(OpCode::DUP);
     emitByte(OpCode::ARRAY_LEN);
-    // TODO: iterate
+    // Load current index
+    emitByte(OpCode::LOAD_VAR, static_cast<uint32_t>(idxLocal));
+    // Compare: index < length?
+    emitByte(OpCode::GT);
+    // If index >= length, exit loop
+    int exitJump = 0;
+    emitJump(OpCode::JUMP_IF_TRUE, exitJump);
     emitByte(OpCode::POP);
 
+    // Load array[index]
+    emitByte(OpCode::DUP);
+    emitByte(OpCode::LOAD_VAR, static_cast<uint32_t>(idxLocal));
+    emitByte(OpCode::LOAD_INDEX);
+
+    // Store in loop variable
+    emitByte(OpCode::STORE_VAR, static_cast<uint32_t>(varIdx));
+
+    // Compile body
     compileBlock(node->body);
 
+    // Increment index
+    emitByte(OpCode::LOAD_VAR, static_cast<uint32_t>(idxLocal));
+    emitByte(OpCode::LOAD_CONST, addConstant("1"));
+    emitByte(OpCode::ADD);
+    emitByte(OpCode::STORE_VAR, static_cast<uint32_t>(idxLocal));
+
     emitLoop(loopStart);
+
+    patchJump(exitJump);
+    emitByte(OpCode::POP); // pop array
 
     state->breakTargets.pop_back();
     state->continueTargets.pop_back();

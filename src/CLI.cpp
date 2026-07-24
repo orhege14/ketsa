@@ -1,3 +1,7 @@
+#ifdef _MSC_VER
+#pragma warning(disable : 4996)
+#endif
+
 #include "CLI.h"
 #include "Lexer.h"
 #include "Parser.h"
@@ -281,6 +285,29 @@ int CLI::handleRun(const CLIContext& ctx)
         }
     }
 
+    // === BYTECODE OPTIMIZATION PIPELINE ===
+    if (mainFunc)
+    {
+        // Run optimization on the compiled bytecode
+        // Registers passes, runs them, prints results
+        JITEngine optimizer(&errorHandler);
+        optimizer.addPass(std::make_unique<ConstantFoldingPass>());
+        optimizer.addPass(std::make_unique<DeadCodeEliminationPass>());
+        optimizer.addPass(std::make_unique<JumpOptimizationPass>());
+        optimizer.addPass(std::make_unique<PeepholeOptimizationPass>());
+
+        // First pass: run proper optimization passes
+        bool optimized = optimizer.runOptimizationPipeline(mainFunc.get());
+
+        // Second pass: run inline optimizer for additional coverage
+        bool inlineOpt = optimizer.optimize(mainFunc.get());
+
+        if (ctx.printBytecodeFlag && (optimized || inlineOpt))
+        {
+            std::cout << "  [Optimizer] Constant Folding + DCE + JumpOpt + Peephole applied\n";
+        }
+    }
+
     // === JIT ENGINE (if --jit) ===
     std::unique_ptr<JITEngine> jitEngine;
     if (ctx.useJit)
@@ -290,17 +317,17 @@ int CLI::handleRun(const CLIContext& ctx)
 
         std::cout << "[JIT] JIT compilation enabled\n";
 
-        // Register optimization passes
-        auto constFold = std::make_unique<ConstantFoldingPass>();
-        auto dce = std::make_unique<DeadCodeEliminationPass>();
-        auto jumpOpt = std::make_unique<JumpOptimizationPass>();
-        auto peephole = std::make_unique<PeepholeOptimizationPass>();
-
-        // Run optimization on main function
         if (mainFunc)
         {
+            // Run bytecode optimization before JIT compilation
+            jitEngine->addPass(std::make_unique<ConstantFoldingPass>());
+            jitEngine->addPass(std::make_unique<DeadCodeEliminationPass>());
+            jitEngine->addPass(std::make_unique<JumpOptimizationPass>());
+            jitEngine->addPass(std::make_unique<PeepholeOptimizationPass>());
+            jitEngine->runOptimizationPipeline(mainFunc.get());
             jitEngine->optimize(mainFunc.get());
-            std::cout << "[JIT] Optimized main function\n";
+
+            std::cout << "[JIT] Optimized main function, attempting native compilation\n";
         }
     }
 

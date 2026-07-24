@@ -1,12 +1,15 @@
 #define NOMINMAX
 #include "JIT.h"
+#include "x64/Assembler.h"
 #include <algorithm>
 #include <chrono>
+#include <cstring>
 
 JITEngine::JITEngine(ErrorHandler* handler)
     : errorHandler(handler)
     , enabled(false)
 {
+    assembler = std::make_unique<X64Assembler>();
 }
 
 JITEngine::~JITEngine()
@@ -249,6 +252,9 @@ bool JITEngine::compileFunction(FunctionProto* proto)
     }
 
     size_t finalSize = assembler->end();
+    if (finalSize > 0) {
+        std::memcpy(code, assembler->getCode(), finalSize);
+    }
     makeExecutable(code, finalSize);
     jf.codeSize = finalSize;
     jf.entryPoint = reinterpret_cast<JittedFunction>(code);
@@ -333,6 +339,32 @@ std::vector<ProfileSample> JITEngine::getProfileData() const
         samples.push_back(s);
     }
     return samples;
+}
+
+void JITEngine::addPass(std::unique_ptr<OptimizationPass> pass)
+{
+    if (pass)
+        passes.push_back(std::move(pass));
+}
+
+bool JITEngine::runOptimizationPipeline(FunctionProto* proto)
+{
+    if (!proto) return false;
+    bool anyChanged = false;
+    for (auto& pass : passes)
+    {
+        if (pass && pass->enabled)
+        {
+            bool changed = pass->run(proto);
+            if (changed) anyChanged = true;
+        }
+    }
+    return anyChanged;
+}
+
+void JITEngine::clearPasses()
+{
+    passes.clear();
 }
 
 void JITEngine::resetProfiling()
